@@ -1,6 +1,7 @@
 type wall = [`Left | `Right | `Top | `Bottom]
 
-(* Does tile touch the given wall? Structural — independent of ratios. *)
+(* Does tile touch the given wall?
+   Left: no V-R step; Right: no V-L; Top: no H-R; Bottom: no H-L *)
 let touches_wall wall path =
   let dominated_by = match wall with
     | `Left   -> fun (s : Command.step) -> s.split = `V && s.side = R
@@ -10,100 +11,64 @@ let touches_wall wall path =
   in
   not (List.exists dominated_by path)
 
-(* Edge extent as a rational: product of perpendicular fractions if touching,
-   zero otherwise.
-   Left/Right: extent = product of H-step fractions (height factors)
-   Top/Bottom: extent = product of V-step fractions (width factors) *)
-let extent wall path =
-  if not (touches_wall wall path) then Q.zero
-  else
-    let perp_split = match wall with
-      | `Left | `Right -> `H
-      | `Top | `Bottom -> `V
-    in
-    List.fold_left (fun acc (s : Command.step) ->
-      if s.split = perp_split then
-        let frac = match s.side with
-          | L -> s.ratio
-          | R -> Q.sub Q.one s.ratio
-        in
-        Q.mul acc frac
-      else acc
-    ) Q.one path
+(* Count of perpendicular splits: H for left/right walls, V for top/bottom.
+   extent = (1/2)^perp_depth when touching wall, 0 otherwise. *)
+let perp_depth wall path =
+  let perp_split = match wall with
+    | `Left | `Right -> `H
+    | `Top | `Bottom -> `V
+  in
+  List.length (List.filter (fun (s : Command.step) -> s.split = perp_split) path)
 
 (* Did edge extent strictly increase? *)
 let extent_increased wall path_before path_after =
-  let eb = extent wall path_before in
-  let ea = extent wall path_after in
-  Q.compare ea eb > 0
+  touches_wall wall path_after &&
+  (not (touches_wall wall path_before) ||
+   perp_depth wall path_after < perp_depth wall path_before)
 
-(* Tile dimensions as rationals *)
-let tile_width path =
+(* Aspect signature: h_count - v_count. aspect = 2^sig *)
+let aspect_sig path =
   List.fold_left (fun acc (s : Command.step) ->
-    if s.split = `V then
-      Q.mul acc (match s.side with L -> s.ratio | R -> Q.sub Q.one s.ratio)
-    else acc
-  ) Q.one path
+    match s.split with `H -> acc + 1 | `V -> acc - 1
+  ) 0 path
 
-let tile_height path =
-  List.fold_left (fun acc (s : Command.step) ->
-    if s.split = `H then
-      Q.mul acc (match s.side with L -> s.ratio | R -> Q.sub Q.one s.ratio)
-    else acc
-  ) Q.one path
-
-(* Aspect distortion: sum of |log(aspect_after/aspect_before)| for non-skip leaves.
-   Uses float for the log comparison — exact rational comparison of aspects
-   would require comparing products of rationals, which is doable but the
-   distortion metric itself (log) is transcendental. *)
+(* Sum of |sig_after - sig_before| for all leaves except skip.
+   Replaces float aspect_cost; ordering is preserved (differs by ln 2). *)
 let aspect_distortion ~skip before after =
-  let leaves =
-    let rec go acc = function
-      | Term.Leaf n -> n :: acc
-      | Term.H (a, b, _) | Term.V (a, b, _) -> go (go acc a) b
-    in List.rev (go [] before)
+  let paths_before =
+    List.map (fun n -> (n, Command.find_path n before))
+      (let rec leaves acc = function
+         | Term.Leaf n -> n :: acc
+         | Term.H (a, b) | Term.V (a, b) -> leaves (leaves acc a) b
+       in List.rev (leaves [] before))
   in
-  List.fold_left (fun acc n ->
+  List.fold_left (fun acc (n, pb) ->
     if n = skip then acc
     else
-      let pb = Command.find_path n before in
       let pa = Command.find_path n after in
-      let wb = Q.to_float (tile_width pb) in
-      let hb = Q.to_float (tile_height pb) in
-      let wa = Q.to_float (tile_width pa) in
-      let ha = Q.to_float (tile_height pa) in
-      let aspect_before = wb /. hb in
-      let aspect_after = wa /. ha in
-      acc +. abs_float (log (aspect_after /. aspect_before))
-  ) 0. leaves
+      acc + abs (aspect_sig pa - aspect_sig pb)
+  ) 0 paths_before
 
-(* Center as rational *)
-let center_x path =
-  let x = List.fold_left (fun (pos, size) (s : Command.step) ->
-    if s.split = `V then
-      match s.side with
-      | L -> (pos, Q.mul size s.ratio)
-      | R -> (Q.add pos (Q.mul size s.ratio), Q.mul size (Q.sub Q.one s.ratio))
-    else (pos, size)
-  ) (Q.zero, Q.one) path in
-  let pos, size = x in
-  Q.add pos (Q.div size (Q.make 2 1))
-
-let center_y path =
-  let y = List.fold_left (fun (pos, size) (s : Command.step) ->
-    if s.split = `H then
-      match s.side with
-      | L -> (pos, Q.mul size s.ratio)
-      | R -> (Q.add pos (Q.mul size s.ratio), Q.mul size (Q.sub Q.one s.ratio))
-    else (pos, size)
-  ) (Q.zero, Q.one) path in
-  let pos, size = y in
-  Q.add pos (Q.div size (Q.make 2 1))
+(* Center as dyadic rational: (numerator, denominator) where denom = 2^(k+1).
+   center_x reads V-step sides as binary; center_y reads H-step sides. *)
+let center_coord axis path =
+  let relevant = List.filter (fun (s : Command.step) ->
+    s.split = (match axis with `X -> `V | `Y -> `H)
+  ) path in
+  let k = List.length relevant in
+  let binary_val = List.fold_left (fun acc (s : Command.step) ->
+    acc * 2 + (match s.side with L -> 0 | R -> 1)
+  ) 0 relevant in
+  (2 * binary_val + 1, 1 lsl (k + 1))
 
 (* Did center move strictly in the given direction? *)
 let center_moved dir path_before path_after =
+  let axis = match dir with
+    | Command.Left | Command.Right -> `X
+    | Command.Up | Command.Down -> `Y
+  in
+  let (n1, d1) = center_coord axis path_before in
+  let (n2, d2) = center_coord axis path_after in
   match dir with
-  | Command.Left  -> Q.compare (center_x path_after) (center_x path_before) < 0
-  | Command.Right -> Q.compare (center_x path_after) (center_x path_before) > 0
-  | Command.Up    -> Q.compare (center_y path_after) (center_y path_before) < 0
-  | Command.Down  -> Q.compare (center_y path_after) (center_y path_before) > 0
+  | Command.Left | Command.Up -> n2 * d1 < n1 * d2
+  | Command.Right | Command.Down -> n2 * d1 > n1 * d2

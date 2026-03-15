@@ -1,8 +1,7 @@
 open Nachum
 
-let h = Q.half
-
-(* Generate all binary tree shapes (Catalan recurrence) with k leaves. *)
+(* Generate all binary tree shapes (Catalan recurrence) with k leaves.
+   Leaves are numbered 0..k-1 left-to-right as placeholders. *)
 let rec shapes k =
   if k = 1 then [Term.Leaf 0]
   else
@@ -12,7 +11,7 @@ let rec shapes k =
       let rights = shapes (k - i) in
       List.iter (fun l ->
         List.iter (fun r ->
-          acc := Term.H (l, r, h) :: !acc
+          acc := Term.H (l, r) :: !acc
         ) rights
       ) lefts
     done;
@@ -23,13 +22,13 @@ let assign_splits shape mask =
   let pos = ref 0 in
   let rec go = function
     | Term.Leaf n -> Term.Leaf n
-    | Term.H (a, b, r) | Term.V (a, b, r) ->
+    | Term.H (a, b) | Term.V (a, b) ->
       let bit = !pos in
       incr pos;
       let a' = go a in
       let b' = go b in
-      if (mask lsr bit) land 1 = 0 then Term.H (a', b', r)
-      else Term.V (a', b', r)
+      if (mask lsr bit) land 1 = 0 then Term.H (a', b')
+      else Term.V (a', b')
   in
   go shape
 
@@ -39,10 +38,13 @@ let count_internal = function
     let n = ref 0 in
     let rec go = function
       | Term.Leaf _ -> ()
-      | Term.H (a, b, _) | Term.V (a, b, _) -> incr n; go a; go b
+      | Term.H (a, b) | Term.V (a, b) -> incr n; go a; go b
     in
     go t; !n
 
+(* Place target leaf (label 0) at position `target_pos` (0-indexed left-to-right).
+   All other leaves get labels 1..k-1 left-to-right.
+   The non-target labels don't affect policy behavior for any command targeting leaf 0. *)
 let place_target shape target_pos =
   let pos = ref 0 in
   let next_other = ref 1 in
@@ -56,8 +58,8 @@ let place_target shape target_pos =
         incr next_other;
         Term.Leaf n
       end
-    | Term.H (a, b, r) -> Term.H (go a, go b, r)
-    | Term.V (a, b, r) -> Term.V (go a, go b, r)
+    | Term.H (a, b) -> Term.H (go a, go b)
+    | Term.V (a, b) -> Term.V (go a, go b)
   in
   go shape
 
@@ -70,8 +72,8 @@ let assign_labels shape perm =
       let n = perm.(!pos) in
       incr pos;
       Term.Leaf n
-    | Term.H (a, b, r) -> Term.H (go a, go b, r)
-    | Term.V (a, b, r) -> Term.V (go a, go b, r)
+    | Term.H (a, b) -> Term.H (go a, go b)
+    | Term.V (a, b) -> Term.V (go a, go b)
   in
   go shape
 
@@ -110,6 +112,11 @@ let enumerate_trees k f =
     done
   ) all_shapes
 
+(* --- Symmetry-reduced enumeration for Move --- *)
+
+(* For Move(0, dir): policy behavior depends only on tree structure + position
+   of leaf 0, not on labels of other leaves. Enumerate (shape × splits × position)
+   instead of (shape × splits × k! permutations × k tiles). *)
 let enumerate_reduced k f =
   let all_shapes = shapes k in
   List.iter (fun shape ->
@@ -188,10 +195,12 @@ let () =
   let t0 = Sys.time () in
   for k = 1 to !max_k do
     let tree_count = ref 0 in
+    (* Move: symmetry-reduced, always *)
     enumerate_reduced k (fun tree ->
       incr tree_count;
       check_move_reduced policy pname tree
     );
+    (* Split/Close: brute-force up to --brute *)
     if k <= !brute_k then begin
       enumerate_trees k (fun tree ->
         check_split_close policy pname tree k

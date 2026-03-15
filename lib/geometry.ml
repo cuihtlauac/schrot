@@ -4,16 +4,14 @@ let interpret term =
   let acc = ref [] in
   let rec go x y w h = function
     | Term.Leaf n -> acc := (n, { x; y; w; h }) :: !acc
-    | Term.H (a, b, r) ->
-      let rf = Q.to_float r in
-      let ha = h *. rf in
-      go x y w ha a;
-      go x (y +. ha) w (h -. ha) b
-    | Term.V (a, b, r) ->
-      let rf = Q.to_float r in
-      let wa = w *. rf in
-      go x y wa h a;
-      go (x +. wa) y (w -. wa) h b
+    | Term.H (a, b) ->
+      let h2 = h /. 2. in
+      go x y w h2 a;
+      go x (y +. h2) w h2 b
+    | Term.V (a, b) ->
+      let w2 = w /. 2. in
+      go x y w2 h a;
+      go (x +. w2) y w2 h b
   in
   go 0. 0. 1. 1. term;
   List.rev !acc
@@ -28,6 +26,8 @@ let eps = 1e-9
 
 let aspect r = r.w /. r.h
 
+(* Sum of log-ratio aspect changes for all tiles except `skip`.
+   Lower = less distortion. *)
 let aspect_cost ~skip before after =
   let rb = interpret before in
   let ra = interpret after in

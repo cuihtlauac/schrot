@@ -1,8 +1,5 @@
 open Nachum
 
-let h a b = Term.H (a, b, Q.half)
-let v a b = Term.V (a, b, Q.half)
-
 type test_case = {
   label: string;
   input: Term.t;
@@ -27,16 +24,16 @@ let open_close_tests = [
 
   (* Close cases *)
   { label = "close left child of H";
-    input = h (Leaf 0) (Leaf 1);
+    input = Term.H (Leaf 0, Leaf 1);
     command = Close 0 };
   { label = "close right child of H";
-    input = h (Leaf 0) (Leaf 1);
+    input = Term.H (Leaf 0, Leaf 1);
     command = Close 1 };
   { label = "close left child of V";
-    input = v (Leaf 0) (Leaf 1);
+    input = Term.V (Leaf 0, Leaf 1);
     command = Close 0 };
   { label = "close right child of V";
-    input = v (Leaf 0) (Leaf 1);
+    input = Term.V (Leaf 0, Leaf 1);
     command = Close 1 };
 ]
 
@@ -49,22 +46,22 @@ let open_close_tests = [
 let move_tests =
   let simple = [
     { label = "swap in V";
-      input = v (Leaf 0) (Leaf 1);
+      input = Term.V (Leaf 0, Leaf 1);
       command = Move (0, Right) };
     { label = "swap in V";
-      input = v (Leaf 0) (Leaf 1);
+      input = Term.V (Leaf 0, Leaf 1);
       command = Move (1, Left) };
     { label = "swap in H";
-      input = h (Leaf 0) (Leaf 1);
+      input = Term.H (Leaf 0, Leaf 1);
       command = Move (0, Down) };
     { label = "swap in H";
-      input = h (Leaf 0) (Leaf 1);
+      input = Term.H (Leaf 0, Leaf 1);
       command = Move (1, Up) };
   ] in
   (* Orbit 1 representative: h(0, v(1, 2)) — mixed inner/outer *)
-  let orbit1 = h (Leaf 0) (v (Leaf 1) (Leaf 2)) in
+  let orbit1 = Term.H (Leaf 0, V (Leaf 1, Leaf 2)) in
   (* Orbit 2 representative: h(0, h(1, 2)) — same inner/outer *)
-  let orbit2 = h (Leaf 0) (h (Leaf 1) (Leaf 2)) in
+  let orbit2 = Term.H (Leaf 0, H (Leaf 1, Leaf 2)) in
   let dirs = Command.[Left; Right; Up; Down] in
   let tiles = [0; 1] in
   let cases input =
