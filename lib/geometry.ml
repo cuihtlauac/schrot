@@ -24,6 +24,22 @@ let find_rect n rects =
 
 let eps = 1e-9
 
+let aspect r = r.w /. r.h
+
+(* Sum of log-ratio aspect changes for all tiles except `skip`.
+   Lower = less distortion. *)
+let aspect_cost ~skip before after =
+  let rb = interpret before in
+  let ra = interpret after in
+  List.fold_left (fun acc (n, r0) ->
+    if n = skip then acc
+    else match List.assoc_opt n ra with
+      | None -> acc
+      | Some r1 ->
+        let ratio = aspect r1 /. aspect r0 in
+        acc +. abs_float (log ratio)
+  ) 0. rb
+
 let edge_extent side n term =
   let rects = interpret term in
   match List.assoc_opt n rects with

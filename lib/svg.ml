@@ -7,7 +7,10 @@ let colors = [|
 
 let default_color_of n = colors.(n mod Array.length colors)
 
-let render_group ~x ~y ~width ~height ~margin ?(color_of = default_color_of) term =
+let default_text_color_of _n = "black"
+
+let render_group ~x ~y ~width ~height ~margin
+    ?(color_of = default_color_of) ?(text_color_of = default_text_color_of) term =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
@@ -17,8 +20,9 @@ let render_group ~x ~y ~width ~height ~margin ?(color_of = default_color_of) ter
             fill=\"%s\" stroke=\"black\" stroke-width=\"1\"/>\n"
         x y w h (color_of n);
       addf "<text x=\"%g\" y=\"%g\" text-anchor=\"middle\" \
-            dominant-baseline=\"central\" font-size=\"16\">%d</text>\n"
-        (x +. w /. 2.) (y +. h /. 2.) n
+            dominant-baseline=\"central\" font-size=\"16\" \
+            fill=\"%s\">%d</text>\n"
+        (x +. w /. 2.) (y +. h /. 2.) (text_color_of n) n
     | Term.H (a, b) ->
       let h2 = h /. 2. in
       go x y w h2 a;

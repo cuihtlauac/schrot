@@ -10,15 +10,15 @@
 <text x="38" y="140" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">0.</text>
 <rect x="64" y="70" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="78" width="92" height="124" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="118" y="140" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="118" y="140" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="164" y="78" width="92" height="124" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="140" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="210" y="140" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <line x1="274" y1="140" x2="304" y2="140" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="70" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="78" width="92" height="124" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="368" y="140" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="140" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="414" y="78" width="92" height="124" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="460" y="140" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="460" y="140" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <text x="64" y="228" font-size="11" font-family="monospace">v(0, 1)</text>
 <text x="314" y="228" font-size="11" font-family="monospace">v(1, 0)</text>
 <text x="64" y="244" font-size="11" font-family="monospace" fill="#555">move_right(0)</text>
@@ -27,15 +27,15 @@
 <text x="38" y="360" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">1.</text>
 <rect x="64" y="290" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="298" width="92" height="124" fill="white" stroke="black" stroke-width="1"/>
-<text x="118" y="360" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="118" y="360" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="164" y="298" width="92" height="124" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="210" y="360" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="210" y="360" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <line x1="274" y1="360" x2="304" y2="360" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="290" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="298" width="92" height="124" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="368" y="360" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="360" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="414" y="298" width="92" height="124" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="460" y="360" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="460" y="360" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <text x="64" y="448" font-size="11" font-family="monospace">v(0, 1)</text>
 <text x="314" y="448" font-size="11" font-family="monospace">v(1, 0)</text>
 <text x="64" y="464" font-size="11" font-family="monospace" fill="#555">move_left(1)</text>
@@ -44,15 +44,15 @@
 <text x="38" y="580" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">2.</text>
 <rect x="64" y="510" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="518" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="549" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="549" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="580" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="611" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="611" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <line x1="274" y1="580" x2="304" y2="580" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="510" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="518" width="184" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="549" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="549" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="322" y="580" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="611" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="611" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <text x="64" y="668" font-size="11" font-family="monospace">h(0, 1)</text>
 <text x="314" y="668" font-size="11" font-family="monospace">h(1, 0)</text>
 <text x="64" y="684" font-size="11" font-family="monospace" fill="#555">move_down(0)</text>
@@ -61,15 +61,15 @@
 <text x="38" y="800" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">3.</text>
 <rect x="64" y="730" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="738" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="769" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="769" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="800" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="831" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="831" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <line x1="274" y1="800" x2="304" y2="800" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="730" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="738" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="769" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="769" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="322" y="800" width="184" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="831" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="831" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <text x="64" y="888" font-size="11" font-family="monospace">h(0, 1)</text>
 <text x="314" y="888" font-size="11" font-family="monospace">h(1, 0)</text>
 <text x="64" y="904" font-size="11" font-family="monospace" fill="#555">move_up(1)</text>
@@ -78,19 +78,19 @@
 <text x="38" y="1020" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">4.</text>
 <rect x="64" y="950" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="958" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="989" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="989" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="1020" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="118" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="164" y="1020" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="1020" x2="304" y2="1020" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="950" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="958" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="989" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="989" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="1020" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="368" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="414" y="1020" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="460" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="1051" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="1108" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="1108" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="64" y="1124" font-size="11" font-family="monospace" fill="#555">move_left(0)</text>
@@ -98,19 +98,19 @@
 <text x="38" y="1240" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">5.</text>
 <rect x="64" y="1170" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="1178" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="1209" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="1209" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="1240" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="118" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="164" y="1240" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="1240" x2="304" y2="1240" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="1170" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="1178" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="1209" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="1209" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="1240" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="368" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="414" y="1240" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="460" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="1271" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="1328" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="1328" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="64" y="1344" font-size="11" font-family="monospace" fill="#555">move_right(0)</text>
@@ -118,19 +118,19 @@
 <text x="38" y="1460" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">6.</text>
 <rect x="64" y="1390" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="1398" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="1429" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="1429" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="1460" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="118" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="164" y="1460" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="1460" x2="304" y2="1460" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="1390" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="1398" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="1429" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="1429" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="1460" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="368" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="414" y="1460" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="460" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="1491" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="1548" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="1548" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="64" y="1564" font-size="11" font-family="monospace" fill="#555">move_up(0)</text>
@@ -138,19 +138,19 @@
 <text x="38" y="1680" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">7.</text>
 <rect x="64" y="1610" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="1618" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="1680" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="118" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="164" y="1680" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="1680" x2="304" y2="1680" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="1610" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="1618" width="92" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="368" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="414" y="1618" width="92" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="460" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="1649" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <rect x="322" y="1680" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="1711" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <text x="64" y="1768" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="1768" font-size="11" font-family="monospace">h(v(1, 2), 0)</text>
 <text x="64" y="1784" font-size="11" font-family="monospace" fill="#555">move_down(0)</text>
@@ -158,19 +158,19 @@
 <text x="38" y="1900" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">8.</text>
 <rect x="64" y="1830" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="1838" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="1869" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="1869" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="1900" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="118" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="164" y="1900" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="1900" x2="304" y2="1900" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="1830" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="1838" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="1869" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="1869" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="1900" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="368" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="414" y="1900" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="460" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="1931" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="1988" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="1988" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="64" y="2004" font-size="11" font-family="monospace" fill="#555">move_left(1)</text>
@@ -178,19 +178,19 @@
 <text x="38" y="2120" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">9.</text>
 <rect x="64" y="2050" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="2058" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="2089" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="2089" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="2120" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="118" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="164" y="2120" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="2120" x2="304" y2="2120" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="2050" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="2058" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="2089" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="2089" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="2120" width="92" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="368" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="368" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <rect x="414" y="2120" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="460" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="460" y="2151" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <text x="64" y="2208" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="2208" font-size="11" font-family="monospace">h(0, v(2, 1))</text>
 <text x="64" y="2224" font-size="11" font-family="monospace" fill="#555">move_right(1)</text>
@@ -198,19 +198,19 @@
 <text x="38" y="2340" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">10.</text>
 <rect x="64" y="2270" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="2278" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="2340" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="118" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="164" y="2340" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="2340" x2="304" y2="2340" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="2270" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="2278" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="368" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="414" y="2278" width="92" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="460" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="460" y="2309" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="2340" width="184" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="2371" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="2428" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="2428" font-size="11" font-family="monospace">h(v(1, 0), 2)</text>
 <text x="64" y="2444" font-size="11" font-family="monospace" fill="#555">move_up(1)</text>
@@ -218,19 +218,19 @@
 <text x="38" y="2560" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">11.</text>
 <rect x="64" y="2490" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="2498" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="2529" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="2529" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="2560" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="118" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="118" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="164" y="2560" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="210" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="210" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="2560" x2="304" y2="2560" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="2490" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="2498" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="2529" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="2529" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="2560" width="92" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="368" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="368" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="414" y="2560" width="92" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="460" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="460" y="2591" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="2648" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="314" y="2648" font-size="11" font-family="monospace">h(0, v(1, 2))</text>
 <text x="64" y="2664" font-size="11" font-family="monospace" fill="#555">move_down(1)</text>
@@ -238,19 +238,19 @@
 <text x="38" y="2780" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">12.</text>
 <rect x="64" y="2710" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="2718" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="2749" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="2749" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="2780" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="2795.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="2795.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="72" y="2811" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="2826.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="2826.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="2780" x2="304" y2="2780" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="2710" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="2718" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="2749" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="2749" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="2780" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="2795.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="2795.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="322" y="2811" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="2826.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="2826.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="2868" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="2868" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="64" y="2884" font-size="11" font-family="monospace" fill="#555">move_left(0)</text>
@@ -258,19 +258,19 @@
 <text x="38" y="3000" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">13.</text>
 <rect x="64" y="2930" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="2938" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="2969" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="2969" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="3000" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3015.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="3015.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="72" y="3031" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3046.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="3046.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="3000" x2="304" y2="3000" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="2930" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="2938" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="2969" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="2969" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="3000" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3015.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="3015.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="322" y="3031" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3046.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="3046.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="3088" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="3088" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="64" y="3104" font-size="11" font-family="monospace" fill="#555">move_right(0)</text>
@@ -278,19 +278,19 @@
 <text x="38" y="3220" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">14.</text>
 <rect x="64" y="3150" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="3158" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="3189" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="3189" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="3220" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3235.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="3235.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="72" y="3251" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3266.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="3266.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="3220" x2="304" y2="3220" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="3150" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="3158" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="3189" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="3189" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="3220" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3235.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="3235.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="322" y="3251" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3266.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="3266.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="3308" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="3308" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="64" y="3324" font-size="11" font-family="monospace" fill="#555">move_up(0)</text>
@@ -298,19 +298,19 @@
 <text x="38" y="3440" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">15.</text>
 <rect x="64" y="3370" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="3378" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="3409" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="3409" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="72" y="3440" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3455.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="3455.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="72" y="3471" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3486.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="3486.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="3440" x2="304" y2="3440" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="3370" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="3378" width="184" height="62" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="3409" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="3409" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">1</text>
 <rect x="322" y="3440" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="3455.5" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="3455.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">0</text>
 <rect x="322" y="3471" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3486.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="3486.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="3528" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="3528" font-size="11" font-family="monospace">h(1, h(0, 2))</text>
 <text x="64" y="3544" font-size="11" font-family="monospace" fill="#555">move_down(0)</text>
@@ -318,19 +318,19 @@
 <text x="38" y="3660" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">16.</text>
 <rect x="64" y="3590" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="3598" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3629" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="3629" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="3660" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="3675.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="3675.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="72" y="3691" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3706.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="3706.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="3660" x2="304" y2="3660" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="3590" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="3598" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3629" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="3629" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="3660" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="3675.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="3675.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="322" y="3691" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3706.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="3706.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="3748" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="3748" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="64" y="3764" font-size="11" font-family="monospace" fill="#555">move_left(1)</text>
@@ -338,19 +338,19 @@
 <text x="38" y="3880" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">17.</text>
 <rect x="64" y="3810" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="3818" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3849" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="3849" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="3880" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="3895.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="3895.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="72" y="3911" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="3926.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="3926.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="3880" x2="304" y2="3880" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="3810" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="3818" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3849" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="3849" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="3880" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="3895.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="3895.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="322" y="3911" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="3926.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="3926.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="3968" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="3968" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="64" y="3984" font-size="11" font-family="monospace" fill="#555">move_right(1)</text>
@@ -358,19 +358,19 @@
 <text x="38" y="4100" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">18.</text>
 <rect x="64" y="4030" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="4038" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="4069" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="4069" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="4100" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="4115.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="4115.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="72" y="4131" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="4146.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="4146.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="4100" x2="304" y2="4100" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="4030" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="4038" width="184" height="62" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="4069" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="4069" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="322" y="4100" width="184" height="31" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="4115.5" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="4115.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="4131" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="4146.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="4146.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <text x="64" y="4188" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="4188" font-size="11" font-family="monospace">h(1, h(0, 2))</text>
 <text x="64" y="4204" font-size="11" font-family="monospace" fill="#555">move_up(1)</text>
@@ -378,19 +378,19 @@
 <text x="38" y="4320" font-size="14" font-weight="bold" font-family="sans-serif" fill="#999">19.</text>
 <rect x="64" y="4250" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="72" y="4258" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="4289" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="164" y="4289" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="72" y="4320" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="164" y="4335.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="164" y="4335.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <rect x="72" y="4351" width="184" height="31" fill="white" stroke="black" stroke-width="1"/>
-<text x="164" y="4366.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="164" y="4366.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <line x1="274" y1="4320" x2="304" y2="4320" stroke="black" stroke-width="1.5" marker-end="url(#arrow)"/>
 <rect x="314" y="4250" width="200" height="140" fill="none" stroke="#ccc" stroke-width="1"/>
 <rect x="322" y="4258" width="184" height="62" fill="white" stroke="black" stroke-width="1"/>
-<text x="414" y="4289" text-anchor="middle" dominant-baseline="central" font-size="16">0</text>
+<text x="414" y="4289" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">0</text>
 <rect x="322" y="4320" width="184" height="31" fill="#a8d0e6" stroke="black" stroke-width="1"/>
-<text x="414" y="4335.5" text-anchor="middle" dominant-baseline="central" font-size="16">2</text>
+<text x="414" y="4335.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="black">2</text>
 <rect x="322" y="4351" width="184" height="31" fill="#1a3a6b" stroke="black" stroke-width="1"/>
-<text x="414" y="4366.5" text-anchor="middle" dominant-baseline="central" font-size="16">1</text>
+<text x="414" y="4366.5" text-anchor="middle" dominant-baseline="central" font-size="16" fill="white">1</text>
 <text x="64" y="4408" font-size="11" font-family="monospace">h(0, h(1, 2))</text>
 <text x="314" y="4408" font-size="11" font-family="monospace">h(0, h(2, 1))</text>
 <text x="64" y="4424" font-size="11" font-family="monospace" fill="#555">move_down(1)</text>

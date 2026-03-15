@@ -102,6 +102,9 @@ let render_test_row ~policy ~index ~y test =
   let color_in n =
     if n = target then dark_blue else no_color
   in
+  let text_in n =
+    if n = target then "white" else "black"
+  in
   let rules = Policy.compile policy test.command test.input in
   let output =
     List.fold_left (fun t r -> Rewrite.apply r t) test.input rules
@@ -110,6 +113,9 @@ let render_test_row ~policy ~index ~y test =
     if n = target then dark_blue
     else if not (same_position n test.input output) then light_blue
     else no_color
+  in
+  let text_out n =
+    if n = target then "white" else "black"
   in
   (* Row number *)
   addf "<text x=\"%g\" y=\"%g\" font-size=\"14\" font-weight=\"bold\" \
@@ -121,7 +127,7 @@ let render_test_row ~policy ~index ~y test =
         fill=\"none\" stroke=\"#ccc\" stroke-width=\"1\"/>\n"
     x_in y rect_w rect_h;
   add (Svg.render_group ~x:x_in ~y ~width:rect_w ~height:rect_h
-         ~margin:8. ~color_of:color_in test.input);
+         ~margin:8. ~color_of:color_in ~text_color_of:text_in test.input);
   (* Arrow *)
   let x_base = margin +. num_w +. rect_w in
   let arrow_x1 = x_base +. 10. in
@@ -136,7 +142,7 @@ let render_test_row ~policy ~index ~y test =
         fill=\"none\" stroke=\"#ccc\" stroke-width=\"1\"/>\n"
     x_out y rect_w rect_h;
   add (Svg.render_group ~x:x_out ~y ~width:rect_w ~height:rect_h
-         ~margin:8. ~color_of:color_out output);
+         ~margin:8. ~color_of:color_out ~text_color_of:text_out output);
   (* Text: input tree + output tree *)
   let text_y = y +. rect_h +. 18. in
   addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" font-family=\"monospace\">%s</text>\n"

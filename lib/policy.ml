@@ -126,19 +126,36 @@ module Dominance : S = struct
       && not (List.mem n (leaf_set after))
 end
 
-(* Territorial: dominance cascade + transpose for edge extent *)
+(* Territorial: dominance cascade + transpose for edge extent,
+   with compensating transposes to minimize aspect ratio distortion. *)
 module Territorial : S = struct
   let name = "territorial"
 
-  let try_rules rules dir n term =
-    let after = apply_rules rules term in
-    if after = term then None
-    else
-      let edge = dir_to_edge dir in
-      let ext_before = Geometry.edge_extent edge n term in
-      let ext_after = Geometry.edge_extent edge n after in
-      if ext_after > ext_before +. 1e-9 then Some rules
-      else None
+  let extent_ok dir n term after =
+    let edge = dir_to_edge dir in
+    let ext_before = Geometry.edge_extent edge n term in
+    let ext_after = Geometry.edge_extent edge n after in
+    ext_after > ext_before +. 1e-9
+
+  (* Try appending Transpose(m) for each non-target leaf m.
+     Only accept if edge extent is still increased.
+     Return the variant with lowest aspect cost, or base if none helps. *)
+  let with_best_compensation dir n base_rules term =
+    let base_after = apply_rules base_rules term in
+    let base_cost = Geometry.aspect_cost ~skip:n term base_after in
+    let leaves = leaf_set base_after in
+    List.fold_left (fun (best_rules, best_cost) m ->
+      if m = n then (best_rules, best_cost)
+      else
+        let candidate = base_rules @ [Rewrite.Transpose m] in
+        let after = apply_rules candidate term in
+        if not (extent_ok dir n term after) then (best_rules, best_cost)
+        else
+          let cost = Geometry.aspect_cost ~skip:n term after in
+          if cost < best_cost -. 1e-9 then (candidate, cost)
+          else (best_rules, best_cost)
+    ) (base_rules, base_cost) leaves
+    |> fst
 
   let compile cmd term =
     match cmd with
@@ -151,23 +168,34 @@ module Territorial : S = struct
       in
       if pos_ok then pos_rules
       else
-        (* 2. Rotate *)
-        let candidates = [
+        (* 2. Try base candidates for edge extent *)
+        let base_candidates = [
           [Rewrite.Rotate n];
           [Rewrite.Rotate n; Rewrite.Swap n];
-          (* 3. Transpose *)
           [Rewrite.Transpose n];
           [Rewrite.Transpose n; Rewrite.Swap n];
+          [Rewrite.Rotate n; Rewrite.Swap n; Rewrite.Transpose n];
+          [Rewrite.Rotate n; Rewrite.Transpose n];
         ] in
-        let rec first = function
-          | [] -> []
-          | c :: rest ->
-            match try_rules c dir n term with
-            | Some rules -> rules
-            | None -> first rest
-        in
-        first candidates
-    | _ -> Command.compile cmd term
+        let valid = List.filter_map (fun c ->
+          let after = apply_rules c term in
+          if after <> term && extent_ok dir n term after then Some c
+          else None
+        ) base_candidates in
+        (match valid with
+        | [] -> []
+        | _ ->
+          (* Pick the base with best aspect cost after compensation *)
+          let scored = List.map (fun c ->
+            let compensated = with_best_compensation dir n c term in
+            let after = apply_rules compensated term in
+            (compensated, Geometry.aspect_cost ~skip:n term after)
+          ) valid in
+          let best = List.fold_left (fun (br, bc) (r, c) ->
+            if c < bc -. 1e-9 then (r, c) else (br, bc)
+          ) (List.hd scored) (List.tl scored) in
+          fst best)
+    | Command.Split _ | Command.Close _ -> Command.compile cmd term
 
   let predicate cmd before after =
     match cmd with
