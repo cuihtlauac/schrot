@@ -134,10 +134,12 @@ let enumerate_reduced k f =
 
 let failures = ref 0
 let checks = ref 0
+let chain_checks = ref 0
 
-let report_failure policy_name cmd tree after =
+let report_failure tag policy_name cmd tree after =
   incr failures;
-  Printf.printf "FAIL: %s on %s -> %s (policy: %s)\n"
+  Printf.printf "FAIL [%s]: %s on %s -> %s (policy: %s)\n"
+    tag
     (Command.to_string cmd)
     (Term.to_string tree)
     (Term.to_string after)
@@ -151,7 +153,7 @@ let check_cmd policy policy_name cmd tree =
   let after = apply_rules rules tree in
   incr checks;
   if not (Policy.predicate policy cmd tree after) then
-    report_failure policy_name cmd tree after
+    report_failure "single" policy_name cmd tree after
 
 let check_move_reduced policy policy_name tree =
   let dirs = Command.[Left; Right; Up; Down] in
@@ -168,6 +170,57 @@ let check_split_close policy policy_name tree k =
     if k > 1 then
       check_cmd policy policy_name (Command.Close tile) tree
   done
+
+(* Chain checking: repeatedly apply the same move command.
+   Verify monotonicity (extent never decreases) and termination (fixpoint). *)
+let check_chain policy policy_name max_steps tree dir =
+  let wall : Path.wall = match dir with
+    | Command.Left -> `Left | Command.Right -> `Right
+    | Command.Up -> `Top | Command.Down -> `Bottom
+  in
+  let cmd = Command.Move (0, dir) in
+  let rec go step prev prev_depth =
+    if step > max_steps then ()
+    else
+      let rules = Policy.compile policy cmd prev in
+      let after = apply_rules rules prev in
+      incr chain_checks;
+      if after = prev then () (* fixpoint, done *)
+      else begin
+        if not (Policy.predicate policy cmd prev after) then
+          report_failure "chain-pred" policy_name cmd prev after;
+        let path_after = Command.find_path 0 after in
+        let depth_after =
+          if Path.touches_wall wall path_after then
+            Path.perp_depth wall path_after
+          else max_int (* not touching = worse than any depth *)
+        in
+        if depth_after > prev_depth then
+          report_failure "chain-mono" policy_name cmd prev after;
+        go (step + 1) after depth_after
+      end
+  in
+  let path0 = Command.find_path 0 tree in
+  let depth0 =
+    if Path.touches_wall wall path0 then
+      Path.perp_depth wall path0
+    else max_int
+  in
+  go 1 tree depth0
+
+let check_chains_reduced policy policy_name max_steps tree =
+  let dirs = Command.[Left; Right; Up; Down] in
+  List.iter (fun dir ->
+    check_chain policy policy_name max_steps tree dir
+  ) dirs
+
+(* Chain length budget: long chains for small k, short for large k.
+   Total work per tree ≈ max_steps × 4 dirs × compile cost. *)
+let chain_budget k =
+  if k <= 4 then k        (* full depth: converge to fixpoint *)
+  else if k <= 6 then 3
+  else if k <= 8 then 2
+  else 1
 
 let () =
   let max_k = ref 10 in
@@ -195,10 +248,12 @@ let () =
   let t0 = Sys.time () in
   for k = 1 to !max_k do
     let tree_count = ref 0 in
-    (* Move: symmetry-reduced, always *)
+    let budget = chain_budget k in
+    (* Move: symmetry-reduced single-step + chain *)
     enumerate_reduced k (fun tree ->
       incr tree_count;
-      check_move_reduced policy pname tree
+      check_move_reduced policy pname tree;
+      check_chains_reduced policy pname budget tree
     );
     (* Split/Close: brute-force up to --brute *)
     if k <= !brute_k then begin
@@ -207,9 +262,10 @@ let () =
       )
     end;
     let elapsed = Sys.time () -. t0 in
-    Printf.printf "  k=%d: %d trees (reduced), %d checks so far, %.2fs\n%!"
-      k !tree_count !checks elapsed
+    Printf.printf "  k=%d: %d trees (reduced), %d single + %d chain checks, %.2fs\n%!"
+      k !tree_count !checks !chain_checks elapsed
   done;
   let elapsed = Sys.time () -. t0 in
-  Printf.printf "Done: %d checks, %d failures, %.2fs\n" !checks !failures elapsed;
+  Printf.printf "Done: %d single + %d chain checks, %d failures, %.2fs\n"
+    !checks !chain_checks !failures elapsed;
   if !failures > 0 then exit 1

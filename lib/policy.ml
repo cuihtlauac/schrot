@@ -126,21 +126,27 @@ module Dominance : S = struct
       && not (List.mem n (leaf_set after))
 end
 
-(* Territorial: dominance cascade + transpose for edge extent,
-   with compensating transposes to minimize aspect ratio distortion. *)
+(* Territorial: one-bite-at-a-time edge growth.
+   Each move removes at most one perpendicular constraint from the tile's path,
+   growing extent from (1/2)^n to (1/2)^(n-1). Compensating transposes
+   preserve aspect ratios of non-target tiles. *)
 module Territorial : S = struct
   let name = "territorial"
 
-  let extent_ok dir n term after =
+  (* Compute perp_depth after applying candidate, or None if extent didn't increase *)
+  let extent_after dir n term after =
     let wall = dir_to_wall dir in
     let path_before = Command.find_path n term in
     let path_after = Command.find_path n after in
-    Path.extent_increased wall path_before path_after
+    if Path.extent_increased wall path_before path_after then
+      Some (Path.perp_depth wall path_after)
+    else
+      None
 
   (* Try appending Transpose(m) for each non-target leaf m.
-     Only accept if edge extent is still increased.
+     Only accept if extent still increased and perp_depth_after matches target.
      Return the variant with lowest aspect distortion, or base if none helps. *)
-  let with_best_compensation dir n base_rules term =
+  let with_best_compensation dir n target_depth base_rules term =
     let base_after = apply_rules base_rules term in
     let base_cost = Path.aspect_distortion ~skip:n term base_after in
     let leaves = leaf_set base_after in
@@ -149,11 +155,12 @@ module Territorial : S = struct
       else
         let candidate = base_rules @ [Rewrite.Transpose m] in
         let after = apply_rules candidate term in
-        if not (extent_ok dir n term after) then (best_rules, best_cost)
-        else
+        match extent_after dir n term after with
+        | Some d when d >= target_depth ->
           let cost = Path.aspect_distortion ~skip:n term after in
           if cost < best_cost then (candidate, cost)
           else (best_rules, best_cost)
+        | _ -> (best_rules, best_cost)
     ) (base_rules, base_cost) leaves
     |> fst
 
@@ -177,23 +184,29 @@ module Territorial : S = struct
           [Rewrite.Rotate n; Rewrite.Swap n; Rewrite.Transpose n];
           [Rewrite.Rotate n; Rewrite.Transpose n];
         ] in
-        let valid = List.filter_map (fun c ->
+        (* Score each candidate: (rules, perp_depth_after) *)
+        let scored = List.filter_map (fun c ->
           let after = apply_rules c term in
-          if after <> term && extent_ok dir n term after then Some c
-          else None
+          if after = term then None
+          else match extent_after dir n term after with
+            | Some depth -> Some (c, depth)
+            | None -> None
         ) base_candidates in
-        (match valid with
+        (match scored with
         | [] -> []
         | _ ->
-          (* Pick the base with best aspect distortion after compensation *)
-          let scored = List.map (fun c ->
-            let compensated = with_best_compensation dir n c term in
-            let after = apply_rules compensated term in
-            (compensated, Path.aspect_distortion ~skip:n term after)
-          ) valid in
+          (* One bite: pick highest perp_depth (= smallest extent increase) *)
+          let max_depth = List.fold_left (fun acc (_, d) -> max acc d) 0 scored in
+          let minimal = List.filter (fun (_, d) -> d = max_depth) scored in
+          (* Among minimal-growth candidates, pick best aspect after compensation *)
+          let compensated = List.map (fun (c, _) ->
+            let comp = with_best_compensation dir n max_depth c term in
+            let after = apply_rules comp term in
+            (comp, Path.aspect_distortion ~skip:n term after)
+          ) minimal in
           let best = List.fold_left (fun (br, bc) (r, c) ->
             if c < bc then (r, c) else (br, bc)
-          ) (List.hd scored) (List.tl scored) in
+          ) (List.hd compensated) (List.tl compensated) in
           fst best)
     | Command.Split _ | Command.Close _ -> Command.compile cmd term
 
