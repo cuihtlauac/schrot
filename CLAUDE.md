@@ -74,6 +74,10 @@ The tiling algebra (Zeidler et al. 2017) provides the specification language:
 
 The connection to nachum: the algebra states geometric policies, term rewriting implements them at runtime (no solver needed), and proofs connect the two. Different policies = different compilations of the same high-level commands.
 
+## Branches
+
+- `area-preserving` — Rational split ratios (`Q.t` per node) with area-preserving rewrite rules. Every rule application preserves all tile area fractions via `fix_ratios`. Reverted from main because full area preservation is too strong (tiles never resize). May be revisited with selective preservation (e.g., only target tile, or policy-controlled).
+
 ## Future directions
 
 - Tree will gain split-ratio/aspect annotations (like i3 percent)
