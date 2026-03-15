@@ -1,6 +1,7 @@
 open Nachum
 
-(* Generate all binary tree shapes (Catalan recurrence) with k leaves *)
+(* Generate all binary tree shapes (Catalan recurrence) with k leaves.
+   Leaves are numbered 0..k-1 left-to-right as placeholders. *)
 let rec shapes k =
   if k = 1 then [Term.Leaf 0]
   else
@@ -10,7 +11,6 @@ let rec shapes k =
       let rights = shapes (k - i) in
       List.iter (fun l ->
         List.iter (fun r ->
-          (* Use H as placeholder — split assignment replaces it *)
           acc := Term.H (l, r) :: !acc
         ) rights
       ) lefts
@@ -42,7 +42,29 @@ let count_internal = function
     in
     go t; !n
 
-(* Assign leaf labels: permutation perm maps position -> label *)
+(* Place target leaf (label 0) at position `target_pos` (0-indexed left-to-right).
+   All other leaves get labels 1..k-1 left-to-right.
+   The non-target labels don't affect policy behavior for any command targeting leaf 0. *)
+let place_target shape target_pos =
+  let pos = ref 0 in
+  let next_other = ref 1 in
+  let rec go = function
+    | Term.Leaf _ ->
+      let p = !pos in
+      incr pos;
+      if p = target_pos then Term.Leaf 0
+      else begin
+        let n = !next_other in
+        incr next_other;
+        Term.Leaf n
+      end
+    | Term.H (a, b) -> Term.H (go a, go b)
+    | Term.V (a, b) -> Term.V (go a, go b)
+  in
+  go shape
+
+(* --- Brute-force enumeration (original, for Split/Close) --- *)
+
 let assign_labels shape perm =
   let pos = ref 0 in
   let rec go = function
@@ -55,7 +77,6 @@ let assign_labels shape perm =
   in
   go shape
 
-(* Generate all permutations of [0..n-1] *)
 let permutations n =
   let arr = Array.init n Fun.id in
   let results = ref [] in
@@ -77,7 +98,6 @@ let permutations n =
   if n = 0 then [[||]]
   else begin gen n; List.rev !results end
 
-(* Enumerate all trees with k leaves, call f on each *)
 let enumerate_trees k f =
   let all_shapes = shapes k in
   let perms = permutations k in
@@ -92,63 +112,75 @@ let enumerate_trees k f =
     done
   ) all_shapes
 
+(* --- Symmetry-reduced enumeration for Move --- *)
+
+(* For Move(0, dir): policy behavior depends only on tree structure + position
+   of leaf 0, not on labels of other leaves. Enumerate (shape × splits × position)
+   instead of (shape × splits × k! permutations × k tiles). *)
+let enumerate_reduced k f =
+  let all_shapes = shapes k in
+  List.iter (fun shape ->
+    let n_internal = count_internal shape in
+    let n_splits = 1 lsl n_internal in
+    for mask = 0 to n_splits - 1 do
+      let split_tree = assign_splits shape mask in
+      for target_pos = 0 to k - 1 do
+        f (place_target split_tree target_pos)
+      done
+    done
+  ) all_shapes
+
+(* --- Checking --- *)
+
 let failures = ref 0
 let checks = ref 0
 
 let report_failure policy_name cmd tree after =
   incr failures;
-  Printf.printf "FAIL: %s on %s: %s -> %s (policy: %s)\n"
+  Printf.printf "FAIL: %s on %s -> %s (policy: %s)\n"
     (Command.to_string cmd)
-    (Term.to_string tree)
     (Term.to_string tree)
     (Term.to_string after)
     policy_name
 
-let check_move policy policy_name tree k =
+let apply_rules rules tree =
+  List.fold_left (fun t r -> Rewrite.apply r t) tree rules
+
+let check_cmd policy policy_name cmd tree =
+  let rules = Policy.compile policy cmd tree in
+  let after = apply_rules rules tree in
+  incr checks;
+  if not (Policy.predicate policy cmd tree after) then
+    report_failure policy_name cmd tree after
+
+let check_move_reduced policy policy_name tree =
+  let dirs = Command.[Left; Right; Up; Down] in
+  List.iter (fun dir ->
+    check_cmd policy policy_name (Command.Move (0, dir)) tree
+  ) dirs
+
+let check_split_close policy policy_name tree k =
   let dirs = Command.[Left; Right; Up; Down] in
   for tile = 0 to k - 1 do
     List.iter (fun dir ->
-      let cmd = Command.Move (tile, dir) in
-      let rules = Policy.compile policy cmd tree in
-      let after = List.fold_left (fun t r -> Rewrite.apply r t) tree rules in
-      incr checks;
-      if not (Policy.predicate policy cmd tree after) then
-        report_failure policy_name cmd tree after
-    ) dirs
-  done
-
-let check_split policy policy_name tree k =
-  let dirs = Command.[Left; Right; Up; Down] in
-  for tile = 0 to k - 1 do
-    List.iter (fun dir ->
-      let cmd = Command.Split (tile, dir) in
-      let rules = Policy.compile policy cmd tree in
-      let after = List.fold_left (fun t r -> Rewrite.apply r t) tree rules in
-      incr checks;
-      if not (Policy.predicate policy cmd tree after) then
-        report_failure policy_name cmd tree after
-    ) dirs
-  done
-
-let check_close policy policy_name tree k =
-  for tile = 0 to k - 1 do
-    let cmd = Command.Close tile in
-    let rules = Policy.compile policy cmd tree in
-    let after = List.fold_left (fun t r -> Rewrite.apply r t) tree rules in
-    incr checks;
-    if not (Policy.predicate policy cmd tree after) then
-      report_failure policy_name cmd tree after
+      check_cmd policy policy_name (Command.Split (tile, dir)) tree
+    ) dirs;
+    if k > 1 then
+      check_cmd policy policy_name (Command.Close tile) tree
   done
 
 let () =
-  let max_k = ref 6 in
-  let policy_name = ref "positional" in
+  let max_k = ref 10 in
+  let policy_name = ref "territorial" in
+  let brute_k = ref 6 in
   let args = Array.to_list Sys.argv |> List.tl in
   let rec parse_args = function
     | "--max-leaves" :: v :: rest ->
       max_k := int_of_string v; parse_args rest
     | "--policy" :: v :: rest ->
       policy_name := v; parse_args rest
+    | "--brute" :: v :: rest ->
+      brute_k := int_of_string v; parse_args rest
     | [] -> ()
     | arg :: _ ->
       Printf.eprintf "Unknown argument: %s\n" arg;
@@ -157,17 +189,26 @@ let () =
   parse_args args;
   let policy = Policy.find !policy_name in
   let pname = Policy.name policy in
-  Printf.printf "Model checking policy '%s' up to %d leaves...\n%!" pname !max_k;
+  Printf.printf "Model checking policy '%s' up to %d leaves \
+                  (brute-force Split/Close up to %d)...\n%!"
+    pname !max_k !brute_k;
   let t0 = Sys.time () in
   for k = 1 to !max_k do
     let tree_count = ref 0 in
-    enumerate_trees k (fun tree ->
+    (* Move: symmetry-reduced, always *)
+    enumerate_reduced k (fun tree ->
       incr tree_count;
-      check_move policy pname tree k;
-      check_split policy pname tree k;
-      if k > 1 then check_close policy pname tree k
+      check_move_reduced policy pname tree
     );
-    Printf.printf "  k=%d: %d trees checked\n%!" k !tree_count
+    (* Split/Close: brute-force up to --brute *)
+    if k <= !brute_k then begin
+      enumerate_trees k (fun tree ->
+        check_split_close policy pname tree k
+      )
+    end;
+    let elapsed = Sys.time () -. t0 in
+    Printf.printf "  k=%d: %d trees (reduced), %d checks so far, %.2fs\n%!"
+      k !tree_count !checks elapsed
   done;
   let elapsed = Sys.time () -. t0 in
   Printf.printf "Done: %d checks, %d failures, %.2fs\n" !checks !failures elapsed;
