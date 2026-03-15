@@ -24,7 +24,7 @@ let leaf_count term = List.length (leaf_set term)
 let apply_rules rules term =
   List.fold_left (fun t r -> Rewrite.apply r t) term rules
 
-let dir_to_edge = function
+let dir_to_wall : Command.dir -> Path.wall = function
   | Command.Left -> `Left
   | Command.Right -> `Right
   | Command.Up -> `Top
@@ -75,21 +75,21 @@ module Dominance : S = struct
       in
       if pos_ok then pos_rules
       else
+        let wall = dir_to_wall dir in
+        let path_before = Command.find_path n term in
         (* Try Rotate alone *)
         let rotate_rules = [Rewrite.Rotate n] in
         let after_rotate = apply_rules rotate_rules term in
         if after_rotate <> term then
-          let edge = dir_to_edge dir in
-          let ext_before = Geometry.edge_extent edge n term in
-          let ext_after = Geometry.edge_extent edge n after_rotate in
-          if ext_after > ext_before +. 1e-9 then rotate_rules
+          let path_after = Command.find_path n after_rotate in
+          if Path.extent_increased wall path_before path_after then rotate_rules
           else
             (* Try Rotate + Swap *)
             let rs_rules = [Rewrite.Rotate n; Rewrite.Swap n] in
             let after_rs = apply_rules rs_rules term in
             if after_rs <> term then
-              let ext_after_rs = Geometry.edge_extent edge n after_rs in
-              if ext_after_rs > ext_before +. 1e-9 then rs_rules
+              let path_after_rs = Command.find_path n after_rs in
+              if Path.extent_increased wall path_before path_after_rs then rs_rules
               else []
             else []
         else []
@@ -113,7 +113,7 @@ module Dominance : S = struct
              | Up    -> Geometry.center_y ra < Geometry.center_y rb -. 1e-9
              | Down  -> Geometry.center_y ra > Geometry.center_y rb +. 1e-9
            in
-           let edge = dir_to_edge dir in
+           let edge = dir_to_wall dir in
            let ext_before = Geometry.edge_extent edge n before in
            let ext_after = Geometry.edge_extent edge n after in
            center_moved || ext_after > ext_before +. 1e-9
@@ -132,17 +132,17 @@ module Territorial : S = struct
   let name = "territorial"
 
   let extent_ok dir n term after =
-    let edge = dir_to_edge dir in
-    let ext_before = Geometry.edge_extent edge n term in
-    let ext_after = Geometry.edge_extent edge n after in
-    ext_after > ext_before +. 1e-9
+    let wall = dir_to_wall dir in
+    let path_before = Command.find_path n term in
+    let path_after = Command.find_path n after in
+    Path.extent_increased wall path_before path_after
 
   (* Try appending Transpose(m) for each non-target leaf m.
      Only accept if edge extent is still increased.
-     Return the variant with lowest aspect cost, or base if none helps. *)
+     Return the variant with lowest aspect distortion, or base if none helps. *)
   let with_best_compensation dir n base_rules term =
     let base_after = apply_rules base_rules term in
-    let base_cost = Geometry.aspect_cost ~skip:n term base_after in
+    let base_cost = Path.aspect_distortion ~skip:n term base_after in
     let leaves = leaf_set base_after in
     List.fold_left (fun (best_rules, best_cost) m ->
       if m = n then (best_rules, best_cost)
@@ -151,8 +151,8 @@ module Territorial : S = struct
         let after = apply_rules candidate term in
         if not (extent_ok dir n term after) then (best_rules, best_cost)
         else
-          let cost = Geometry.aspect_cost ~skip:n term after in
-          if cost < best_cost -. 1e-9 then (candidate, cost)
+          let cost = Path.aspect_distortion ~skip:n term after in
+          if cost < best_cost then (candidate, cost)
           else (best_rules, best_cost)
     ) (base_rules, base_cost) leaves
     |> fst
@@ -185,14 +185,14 @@ module Territorial : S = struct
         (match valid with
         | [] -> []
         | _ ->
-          (* Pick the base with best aspect cost after compensation *)
+          (* Pick the base with best aspect distortion after compensation *)
           let scored = List.map (fun c ->
             let compensated = with_best_compensation dir n c term in
             let after = apply_rules compensated term in
-            (compensated, Geometry.aspect_cost ~skip:n term after)
+            (compensated, Path.aspect_distortion ~skip:n term after)
           ) valid in
           let best = List.fold_left (fun (br, bc) (r, c) ->
-            if c < bc -. 1e-9 then (r, c) else (br, bc)
+            if c < bc then (r, c) else (br, bc)
           ) (List.hd scored) (List.tl scored) in
           fst best)
     | Command.Split _ | Command.Close _ -> Command.compile cmd term
@@ -214,7 +214,7 @@ module Territorial : S = struct
              | Up    -> Geometry.center_y ra < Geometry.center_y rb -. 1e-9
              | Down  -> Geometry.center_y ra > Geometry.center_y rb +. 1e-9
            in
-           let edge = dir_to_edge dir in
+           let edge = dir_to_wall dir in
            let ext_before = Geometry.edge_extent edge n before in
            let ext_after = Geometry.edge_extent edge n after in
            center_moved || ext_after > ext_before +. 1e-9
