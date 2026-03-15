@@ -125,4 +125,5 @@ let rule_list_to_string rules =
     | Rewrite.Promote n -> Printf.sprintf "promote(%d)" n
     | Rewrite.Demote n -> Printf.sprintf "demote(%d)" n
     | Rewrite.Rotate n -> Printf.sprintf "rotate(%d)" n
+    | Rewrite.Transpose n -> Printf.sprintf "transpose(%d)" n
   ) rules) ^ "]"

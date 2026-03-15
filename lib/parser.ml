@@ -38,6 +38,8 @@ let parse_rule line =
     Rewrite.Demote (parse_arg "demote")
   else if String.length line >= 7 && String.sub line 0 7 = "rotate(" then
     Rewrite.Rotate (parse_arg "rotate")
+  else if String.length line >= 10 && String.sub line 0 10 = "transpose(" then
+    Rewrite.Transpose (parse_arg "transpose")
   else begin
     Printf.eprintf "Parse error: unknown rule '%s'\n" line;
     exit 1

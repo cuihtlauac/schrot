@@ -9,6 +9,7 @@ type rule =
   | Promote of int
   | Demote of int
   | Rotate of int
+  | Transpose of int
 
 let max_leaf term =
   let rec go = function
@@ -38,9 +39,12 @@ let apply rule term =
        | Close_h_r m when b = Leaf m -> a
        | Swap m when a = Leaf m -> Term.H (b, Leaf m)
        | Swap m when b = Leaf m -> Term.H (Leaf m, a)
+       | Transpose m when a = Leaf m -> Term.V (a, b)
+       | Transpose m when b = Leaf m -> Term.V (a, b)
        | Promote m -> promote_in (Term.H (a, b)) m
        | Demote m -> demote_in (Term.H (a, b)) m
        | Rotate m -> rotate_in (Term.H (a, b)) m
+       | Transpose m -> transpose_in (Term.H (a, b)) m
        | _ -> Term.H (go a, go b))
     | Term.V (a, b) ->
       (match rule with
@@ -48,9 +52,12 @@ let apply rule term =
        | Close_v_r m when b = Leaf m -> a
        | Swap m when a = Leaf m -> Term.V (b, Leaf m)
        | Swap m when b = Leaf m -> Term.V (Leaf m, a)
+       | Transpose m when a = Leaf m -> Term.H (a, b)
+       | Transpose m when b = Leaf m -> Term.H (a, b)
        | Promote m -> promote_in (Term.V (a, b)) m
        | Demote m -> demote_in (Term.V (a, b)) m
        | Rotate m -> rotate_in (Term.V (a, b)) m
+       | Transpose m -> transpose_in (Term.V (a, b)) m
        | _ -> Term.V (go a, go b))
   and promote_in node m =
     let mk, a, b = match node with
@@ -176,6 +183,16 @@ let apply rule term =
        if has_leaf m a then mk_outer (go a) b
        else if has_leaf m b then mk_outer a (go b)
        else node)
+  and transpose_in node m =
+    (* Recurse to find the node containing Leaf m as a direct child *)
+    let mk, a, b = match node with
+      | Term.H (a, b) -> (fun x y -> Term.H (x, y)), a, b
+      | Term.V (a, b) -> (fun x y -> Term.V (x, y)), a, b
+      | _ -> assert false
+    in
+    if has_leaf m a then mk (go a) b
+    else if has_leaf m b then mk a (go b)
+    else node
   in
   go term
 
