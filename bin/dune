@@ -1,3 +1,7 @@
 (executables
  (names main test_svg model_check)
  (libraries nachum))
+
+(executable
+ (name web)
+ (libraries nachum dream))

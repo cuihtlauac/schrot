@@ -10,6 +10,8 @@ type rule =
   | Demote of int
   | Rotate of int
   | Transpose of int
+  | Slide of int
+  | Exchange of int * int
 
 let max_leaf term =
   let rec go = function
@@ -25,6 +27,29 @@ let has_leaf n term =
   in
   go term
 
+(* Slide helpers: insert n after the first / before the last element
+   of a same-type subtree, recursing through same-type nesting. *)
+let rec slide_into_first mk_same is_same n = function
+  | node when is_same node ->
+    let a, b = match node with
+      | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
+    if is_same a then mk_same (slide_into_first mk_same is_same n a) b
+    else mk_same a (mk_same (Term.Leaf n) b)
+  | _ -> assert false
+
+let rec slide_into_last mk_same is_same n = function
+  | node when is_same node ->
+    let a, b = match node with
+      | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
+    if is_same b then mk_same a (slide_into_last mk_same is_same n b)
+    else mk_same (mk_same a (Term.Leaf n)) b
+  | _ -> assert false
+
+let is_h = function Term.H _ -> true | _ -> false
+let is_v = function Term.V _ -> true | _ -> false
+let mk_h a b = Term.H (a, b)
+let mk_v a b = Term.V (a, b)
+
 let apply rule term =
   let fresh = max_leaf term + 1 in
   let rec go = function
@@ -32,6 +57,8 @@ let apply rule term =
       (match rule with
        | Split_h m when m = n -> Term.H (Leaf n, Leaf fresh)
        | Split_v m when m = n -> Term.V (Leaf n, Leaf fresh)
+       | Exchange (m, k) when n = m -> Term.Leaf k
+       | Exchange (m, k) when n = k -> Term.Leaf m
        | _ -> Term.Leaf n)
     | Term.H (a, b) ->
       (match rule with
@@ -39,6 +66,12 @@ let apply rule term =
        | Close_h_r m when b = Leaf m -> a
        | Swap m when a = Leaf m -> Term.H (b, Leaf m)
        | Swap m when b = Leaf m -> Term.H (Leaf m, a)
+       | Slide m when a = Leaf m ->
+         if is_h b then slide_into_first mk_h is_h m b
+         else Term.H (b, Leaf m)
+       | Slide m when b = Leaf m ->
+         if is_h a then slide_into_last mk_h is_h m a
+         else Term.H (Leaf m, a)
        | Transpose m when a = Leaf m -> Term.V (a, b)
        | Transpose m when b = Leaf m -> Term.V (a, b)
        | Promote m -> promote_in (Term.H (a, b)) m
@@ -52,6 +85,12 @@ let apply rule term =
        | Close_v_r m when b = Leaf m -> a
        | Swap m when a = Leaf m -> Term.V (b, Leaf m)
        | Swap m when b = Leaf m -> Term.V (Leaf m, a)
+       | Slide m when a = Leaf m ->
+         if is_v b then slide_into_first mk_v is_v m b
+         else Term.V (b, Leaf m)
+       | Slide m when b = Leaf m ->
+         if is_v a then slide_into_last mk_v is_v m a
+         else Term.V (Leaf m, a)
        | Transpose m when a = Leaf m -> Term.H (a, b)
        | Transpose m when b = Leaf m -> Term.H (a, b)
        | Promote m -> promote_in (Term.V (a, b)) m

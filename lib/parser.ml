@@ -40,6 +40,14 @@ let parse_rule line =
     Rewrite.Rotate (parse_arg "rotate")
   else if String.length line >= 10 && String.sub line 0 10 = "transpose(" then
     Rewrite.Transpose (parse_arg "transpose")
+  else if String.length line >= 6 && String.sub line 0 6 = "slide(" then
+    Rewrite.Slide (parse_arg "slide")
+  else if String.length line >= 9 && String.sub line 0 9 = "exchange(" then
+    let inner = String.sub line 9 (String.length line - 10) in
+    (match String.split_on_char ',' inner with
+     | [a; b] -> Rewrite.Exchange (parse_int a, parse_int b)
+     | _ ->
+       Printf.eprintf "Parse error: expected exchange(n, k)\n"; exit 1)
   else begin
     Printf.eprintf "Parse error: unknown rule '%s'\n" line;
     exit 1

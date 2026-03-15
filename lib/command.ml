@@ -30,17 +30,59 @@ let find_path n term =
   | Some path -> path
   | None -> failwith (Printf.sprintf "find_path: leaf %d not found" n)
 
-let root_sibling n = function
-  | Term.H (Term.Leaf m, b) when m = n -> b
-  | Term.H (a, Term.Leaf m) when m = n -> a
-  | Term.V (Term.Leaf m, b) when m = n -> b
-  | Term.V (a, Term.Leaf m) when m = n -> a
-  | _ -> assert false
 
-let is_split_type split = function
-  | Term.H _ -> split = `H
-  | Term.V _ -> split = `V
-  | Term.Leaf _ -> false
+(* Find the geometric neighbor of tile n in direction dir.
+   Must overlap in the perpendicular axis and be adjacent (or nearest)
+   in the movement axis. *)
+let geometric_neighbor n dir term =
+  let rects = Geometry.interpret term in
+  match List.assoc_opt n rects with
+  | None -> None
+  | Some rn ->
+    let eps = 1e-9 in
+    let candidates = List.filter_map (fun (m, rm) ->
+      if m = n then None
+      else
+        let open Geometry in
+        let perp_overlap, dist = match dir with
+          | Down ->
+            let ox = min (rn.x +. rn.w) (rm.x +. rm.w) -. max rn.x rm.x in
+            (ox, rm.y -. (rn.y +. rn.h))
+          | Up ->
+            let ox = min (rn.x +. rn.w) (rm.x +. rm.w) -. max rn.x rm.x in
+            (ox, rn.y -. (rm.y +. rm.h))
+          | Right ->
+            let oy = min (rn.y +. rn.h) (rm.y +. rm.h) -. max rn.y rm.y in
+            (oy, rm.x -. (rn.x +. rn.w))
+          | Left ->
+            let oy = min (rn.y +. rn.h) (rm.y +. rm.h) -. max rn.y rm.y in
+            (oy, rn.x -. (rm.x +. rm.w))
+        in
+        if perp_overlap > eps && dist > -.eps then
+          Some (m, perp_overlap, dist)
+        else None
+    ) rects in
+    (* Nearest: smallest distance, then most overlap *)
+    let pick_best = List.fold_left (fun best (m, o, d) ->
+      match best with
+      | None -> Some (m, o, d)
+      | Some (_, bo, bd) ->
+        if d < bd -. eps then Some (m, o, d)
+        else if d < bd +. eps && o > bo +. eps then Some (m, o, d)
+        else best
+    ) None in
+    match pick_best candidates with
+    | Some (m, _, _) -> Some m
+    | None -> None
+
+(* Navigate the tree following path steps *)
+let rec navigate term = function
+  | [] -> term
+  | step :: rest ->
+    match term with
+    | Term.H (a, b) | Term.V (a, b) ->
+      navigate (if step.side = L then a else b) rest
+    | Term.Leaf _ -> assert false
 
 let compile cmd term =
   match cmd with
@@ -67,39 +109,26 @@ let compile cmd term =
         | Up -> `H, R
         | Down -> `H, L
       in
-      let last = List.nth path (len - 1) in
-      if last.split = aligned_split then
-        (* Immediate parent is aligned with direction *)
-        if last.side = favorable_side then
-          (* Favorable side: can potentially move *)
-          if len = 1 then
-            (* Root child: check sibling compatibility *)
-            let sib = root_sibling n term in
-            if is_split_type aligned_split sib then
-              (* Same-type compound sibling: slide into it *)
-              [Rewrite.Swap n; Rewrite.Demote n; Rewrite.Swap n]
-            else
-              [Rewrite.Swap n]
-          else
-            [Rewrite.Swap n]
+      (* Scan from leaf toward root for first aligned+favorable ancestor *)
+      let rec find_favorable i =
+        if i < 0 then None
         else
-          (* Unfavorable side: at inner edge, need outer escape *)
-          if len >= 2 then
-            let outer = List.nth path (len - 2) in
-            if outer.split = aligned_split
-               && outer.side = favorable_side then
-              [Rewrite.Promote n; Rewrite.Promote n]
-            else []
-          else []
-      else
-        (* Immediate parent not aligned: need aligned ancestor *)
-        if len >= 2 then
-          let outer = List.nth path (len - 2) in
-          if outer.split = aligned_split
-             && outer.side = favorable_side then
-            [Rewrite.Promote n]
-          else []
-        else []
+          let step = List.nth path i in
+          if step.split = aligned_split && step.side = favorable_side then
+            Some i
+          else
+            find_favorable (i - 1)
+      in
+      match find_favorable (len - 1) with
+      | None -> []
+      | Some i when i = len - 1 ->
+        (* Immediate parent: slide over neighbor *)
+        [Rewrite.Slide n]
+      | Some _ ->
+        (* Ancestor: exchange with nearest geometric neighbor *)
+        (match geometric_neighbor n dir term with
+         | Some neighbor -> [Rewrite.Exchange (n, neighbor)]
+         | None -> [])
 
 let to_string = function
   | Split (n, Left) -> Printf.sprintf "split(%d, left)" n
@@ -126,4 +155,6 @@ let rule_list_to_string rules =
     | Rewrite.Demote n -> Printf.sprintf "demote(%d)" n
     | Rewrite.Rotate n -> Printf.sprintf "rotate(%d)" n
     | Rewrite.Transpose n -> Printf.sprintf "transpose(%d)" n
+    | Rewrite.Slide n -> Printf.sprintf "slide(%d)" n
+    | Rewrite.Exchange (m, k) -> Printf.sprintf "exchange(%d, %d)" m k
   ) rules) ^ "]"
