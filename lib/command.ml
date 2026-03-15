@@ -6,24 +6,24 @@ type t =
   | Move of int * dir
 
 type side = L | R
-type step = { split: [`H | `V]; side: side }
+type step = { split: [`H | `V]; side: side; ratio: Q.t }
 
 let find_path n term =
   let rec go = function
     | Term.Leaf m -> if m = n then Some [] else None
-    | Term.H (a, b) ->
+    | Term.H (a, b, r) ->
       (match go a with
-       | Some path -> Some ({ split = `H; side = L } :: path)
+       | Some path -> Some ({ split = `H; side = L; ratio = r } :: path)
        | None ->
          match go b with
-         | Some path -> Some ({ split = `H; side = R } :: path)
+         | Some path -> Some ({ split = `H; side = R; ratio = r } :: path)
          | None -> None)
-    | Term.V (a, b) ->
+    | Term.V (a, b, r) ->
       (match go a with
-       | Some path -> Some ({ split = `V; side = L } :: path)
+       | Some path -> Some ({ split = `V; side = L; ratio = r } :: path)
        | None ->
          match go b with
-         | Some path -> Some ({ split = `V; side = R } :: path)
+         | Some path -> Some ({ split = `V; side = R; ratio = r } :: path)
          | None -> None)
   in
   match go term with
@@ -31,10 +31,10 @@ let find_path n term =
   | None -> failwith (Printf.sprintf "find_path: leaf %d not found" n)
 
 let root_sibling n = function
-  | Term.H (Term.Leaf m, b) when m = n -> b
-  | Term.H (a, Term.Leaf m) when m = n -> a
-  | Term.V (Term.Leaf m, b) when m = n -> b
-  | Term.V (a, Term.Leaf m) when m = n -> a
+  | Term.H (Term.Leaf m, b, _) when m = n -> b
+  | Term.H (a, Term.Leaf m, _) when m = n -> a
+  | Term.V (Term.Leaf m, b, _) when m = n -> b
+  | Term.V (a, Term.Leaf m, _) when m = n -> a
   | _ -> assert false
 
 let is_split_type split = function
@@ -69,21 +69,16 @@ let compile cmd term =
       in
       let last = List.nth path (len - 1) in
       if last.split = aligned_split then
-        (* Immediate parent is aligned with direction *)
         if last.side = favorable_side then
-          (* Favorable side: can potentially move *)
           if len = 1 then
-            (* Root child: check sibling compatibility *)
             let sib = root_sibling n term in
             if is_split_type aligned_split sib then
-              (* Same-type compound sibling: slide into it *)
               [Rewrite.Swap n; Rewrite.Demote n; Rewrite.Swap n]
             else
               [Rewrite.Swap n]
           else
             [Rewrite.Swap n]
         else
-          (* Unfavorable side: at inner edge, need outer escape *)
           if len >= 2 then
             let outer = List.nth path (len - 2) in
             if outer.split = aligned_split
@@ -92,7 +87,6 @@ let compile cmd term =
             else []
           else []
       else
-        (* Immediate parent not aligned: need aligned ancestor *)
         if len >= 2 then
           let outer = List.nth path (len - 2) in
           if outer.split = aligned_split

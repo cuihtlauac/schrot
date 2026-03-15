@@ -15,7 +15,7 @@ let predicate (module P : S) = P.predicate
 let leaf_set term =
   let rec go acc = function
     | Term.Leaf n -> n :: acc
-    | Term.H (a, b) | Term.V (a, b) -> go (go acc a) b
+    | Term.H (a, b, _) | Term.V (a, b, _) -> go (go acc a) b
   in
   List.sort compare (go [] term)
 
@@ -152,7 +152,7 @@ module Territorial : S = struct
         if not (extent_ok dir n term after) then (best_rules, best_cost)
         else
           let cost = Path.aspect_distortion ~skip:n term after in
-          if cost < best_cost then (candidate, cost)
+          if cost < best_cost -. 1e-9 then (candidate, cost)
           else (best_rules, best_cost)
     ) (base_rules, base_cost) leaves
     |> fst
@@ -192,7 +192,7 @@ module Territorial : S = struct
             (compensated, Path.aspect_distortion ~skip:n term after)
           ) valid in
           let best = List.fold_left (fun (br, bc) (r, c) ->
-            if c < bc then (r, c) else (br, bc)
+            if c < bc -. 1e-9 then (r, c) else (br, bc)
           ) (List.hd scored) (List.tl scored) in
           fst best)
     | Command.Split _ | Command.Close _ -> Command.compile cmd term

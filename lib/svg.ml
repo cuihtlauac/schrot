@@ -23,14 +23,16 @@ let render_group ~x ~y ~width ~height ~margin
             dominant-baseline=\"central\" font-size=\"16\" \
             fill=\"%s\">%d</text>\n"
         (x +. w /. 2.) (y +. h /. 2.) (text_color_of n) n
-    | Term.H (a, b) ->
-      let h2 = h /. 2. in
-      go x y w h2 a;
-      go x (y +. h2) w h2 b
-    | Term.V (a, b) ->
-      let w2 = w /. 2. in
-      go x y w2 h a;
-      go (x +. w2) y w2 h b
+    | Term.H (a, b, r) ->
+      let rf = Q.to_float r in
+      let ha = h *. rf in
+      go x y w ha a;
+      go x (y +. ha) w (h -. ha) b
+    | Term.V (a, b, r) ->
+      let rf = Q.to_float r in
+      let wa = w *. rf in
+      go x y wa h a;
+      go (x +. wa) y (w -. wa) h b
   in
   go (x +. margin) (y +. margin)
     (width -. 2. *. margin) (height -. 2. *. margin) term;
