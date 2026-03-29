@@ -28,22 +28,17 @@ let has_leaf n term =
   go term
 
 (* Slide helpers: insert n after the first / before the last element
-   of a same-type subtree, recursing through same-type nesting. *)
-let rec slide_into_first mk_same is_same n = function
-  | node when is_same node ->
-    let a, b = match node with
-      | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
-    if is_same a then mk_same (slide_into_first mk_same is_same n a) b
-    else mk_same a (mk_same (Term.Leaf n) b)
-  | _ -> assert false
+   of a same-type subtree. One level only — deeper nesting would shrink
+   the tile and can move its center in the wrong direction. *)
+let slide_into_first mk_same _is_same n node =
+  let a, b = match node with
+    | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
+  mk_same a (mk_same (Term.Leaf n) b)
 
-let rec slide_into_last mk_same is_same n = function
-  | node when is_same node ->
-    let a, b = match node with
-      | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
-    if is_same b then mk_same a (slide_into_last mk_same is_same n b)
-    else mk_same (mk_same a (Term.Leaf n)) b
-  | _ -> assert false
+let slide_into_last mk_same _is_same n node =
+  let a, b = match node with
+    | Term.H (a, b) | Term.V (a, b) -> a, b | _ -> assert false in
+  mk_same (mk_same a (Term.Leaf n)) b
 
 let is_h = function Term.H _ -> true | _ -> false
 let is_v = function Term.V _ -> true | _ -> false

@@ -1,5 +1,5 @@
 (executables
- (names main test_svg model_check)
+ (names main test_svg model_check reachability tiling_test)
  (libraries nachum))
 
 (executable

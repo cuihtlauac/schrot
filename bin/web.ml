@@ -1,38 +1,23 @@
 open Nachum
 
 type state = {
-  mutable term : Term.t;
-  mutable prev_term : Term.t option;
-  mutable policy_name : string;
+  mutable tiling : Tiling.t;
   mutable selected : int option;
   mutable last_command : string option;
-  mutable last_rules : string option;
-  mutable origin : Term.t;
-  mutable history : (Term.t * int option) list;
+  mutable prev_tiling : Tiling.t option;
+  mutable history : (Tiling.t * int option) list;
 }
 
 let state = {
-  term = Term.Leaf 0;
-  prev_term = None;
-  policy_name = "territorial";
+  tiling = (false, Schrot.Tile 0);
   selected = Some 0;
   last_command = None;
-  last_rules = None;
-  origin = Term.Leaf 0;
+  prev_tiling = None;
   history = [];
 }
 
 let push_history () =
-  state.history <- (state.term, state.selected) :: state.history
-
-let leaf_set term =
-  let rec go acc = function
-    | Term.Leaf n -> n :: acc
-    | Term.H (a, b) | Term.V (a, b) -> go (go acc a) b
-  in
-  List.sort compare (go [] term)
-
-let leaf_count term = List.length (leaf_set term)
+  state.history <- (state.tiling, state.selected) :: state.history
 
 let escape_json_string s =
   let buf = Buffer.create (String.length s) in
@@ -51,55 +36,36 @@ let json_str s = Printf.sprintf "\"%s\"" (escape_json_string s)
 let json_str_opt = function None -> "null" | Some s -> json_str s
 let json_int_opt = function None -> "null" | Some n -> string_of_int n
 
-let svg_of_term ?(selected = None) term =
-  let color_of n =
-    if Some n = selected then "#1a3a6b"
-    else Svg.default_color_of n
-  in
-  let text_color_of n =
-    if Some n = selected then "white"
-    else "black"
-  in
-  Svg.render_interactive ~x:0. ~y:0. ~width:500. ~height:400. ~margin:20.
-    ~color_of ~text_color_of term
+let svg_of_tiling ?selected tiling =
+  Svg.render_tiling_group ~x:0. ~y:0. ~width:500. ~height:400. ~margin:20.
+    ?selected ~interactive:true tiling
 
-let svg_of_term_small term =
-  Svg.render_interactive ~x:0. ~y:0. ~width:240. ~height:192. ~margin:10. term
+let svg_of_tiling_small tiling =
+  Svg.render_tiling_group ~x:0. ~y:0. ~width:240. ~height:192. ~margin:10. tiling
 
 let state_json () =
-  let svg = svg_of_term ~selected:state.selected state.term in
-  let prev_svg = match state.prev_term with
-    | Some t -> json_str (svg_of_term_small t)
+  let svg = svg_of_tiling ?selected:state.selected state.tiling in
+  let prev_svg = match state.prev_tiling with
+    | Some t -> json_str (svg_of_tiling_small t)
     | None -> "null"
   in
-  let prev_term = match state.prev_term with
-    | Some t -> json_str (Term.to_string t)
+  let prev_term = match state.prev_tiling with
+    | Some t -> json_str (Tiling.to_string t)
     | None -> "null"
   in
-  let tiles = leaf_set state.term in
-  let policies = List.map Policy.name Policy.all in
+  let tiles = List.sort compare (Tiling.leaves state.tiling) in
   Printf.sprintf
-    {|{"svg":%s,"term":%s,"prev_svg":%s,"prev_term":%s,"policy":"%s","policies":[%s],"tiles":[%s],"selected":%s,"command":%s,"rules":%s,"n_tiles":%d}|}
+    {|{"svg":%s,"term":%s,"prev_svg":%s,"prev_term":%s,"tiles":[%s],"selected":%s,"command":%s,"n_tiles":%d}|}
     (json_str svg)
-    (json_str (Term.to_string state.term))
+    (json_str (Tiling.to_string state.tiling))
     prev_svg
     prev_term
-    state.policy_name
-    (String.concat "," (List.map (Printf.sprintf "\"%s\"") policies))
     (String.concat "," (List.map string_of_int tiles))
     (json_int_opt state.selected)
     (json_str_opt state.last_command)
-    (json_str_opt state.last_rules)
-    (leaf_count state.term)
+    (Tiling.size state.tiling)
 
-let dir_of_string = function
-  | "left" -> Some Command.Left
-  | "right" -> Some Command.Right
-  | "up" -> Some Command.Up
-  | "down" -> Some Command.Down
-  | _ -> None
-
-(* Minimal JSON value parser — just enough for our flat request objects *)
+(* Minimal JSON value parser *)
 let parse_json_field body key =
   let pat = Printf.sprintf "\"%s\"" key in
   let pat_len = String.length pat in
@@ -139,43 +105,74 @@ let parse_json_field body key =
       Some (String.sub body vstart (vend - vstart))
     end
 
-(* Generate a random tree with n leaves, numbered 0..n-1 *)
-let random_term n =
-  if n <= 0 then Term.Leaf 0
+(* Generate a random Schroder tiling with n leaves, numbered 0..n-1 *)
+let random_tiling n =
+  if n <= 0 then (false, Schrot.Tile 0)
   else begin
     Random.self_init ();
-    (* Fisher-Yates shuffle *)
-    let shuffle arr =
-      let len = Array.length arr in
-      for i = len - 1 downto 1 do
-        let j = Random.int (i + 1) in
-        let tmp = arr.(i) in
-        arr.(i) <- arr.(j);
-        arr.(j) <- tmp
-      done
-    in
     let rec build leaves =
       match leaves with
       | [] -> assert false
-      | [x] -> Term.Leaf x
+      | [x] -> Schrot.Tile x
       | _ ->
+        (* Random number of children: 2 to List.length leaves *)
+        let max_k = List.length leaves in
+        let k = 2 + Random.int (max_k - 1) in
+        let k = min k max_k in
+        (* Random partition of leaves into k non-empty groups *)
         let arr = Array.of_list leaves in
-        shuffle arr;
-        let split_at = 1 + Random.int (Array.length arr - 1) in
-        let left = Array.to_list (Array.sub arr 0 split_at) in
-        let right = Array.to_list (Array.sub arr split_at (Array.length arr - split_at)) in
-        let a = build left in
-        let b = build right in
-        if Random.bool () then Term.H (a, b) else Term.V (a, b)
+        (* Fisher-Yates shuffle *)
+        let len = Array.length arr in
+        for i = len - 1 downto 1 do
+          let j = Random.int (i + 1) in
+          let tmp = arr.(i) in
+          arr.(i) <- arr.(j);
+          arr.(j) <- tmp
+        done;
+        (* Place k-1 cut points among len-1 gaps *)
+        let gaps = Array.init (len - 1) (fun i -> i + 1) in
+        for i = Array.length gaps - 1 downto 1 do
+          let j = Random.int (i + 1) in
+          let tmp = gaps.(i) in
+          gaps.(i) <- gaps.(j);
+          gaps.(j) <- tmp
+        done;
+        let cuts = Array.sub gaps 0 (k - 1) in
+        Array.sort compare cuts;
+        let groups = ref [] in
+        let prev = ref 0 in
+        Array.iter (fun c ->
+          groups := Array.to_list (Array.sub arr !prev (c - !prev)) :: !groups;
+          prev := c
+        ) cuts;
+        groups := Array.to_list (Array.sub arr !prev (len - !prev)) :: !groups;
+        let children = List.rev !groups |> List.map build in
+        match children with
+        | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+        | _ -> assert false
     in
-    build (List.init n Fun.id)
+    (Random.bool (), build (List.init n Fun.id))
   end
+
+let split_of_string = function
+  | "left"  -> Some (Tiling.V, Tiling.Before)
+  | "right" -> Some (Tiling.V, Tiling.After)
+  | "up"    -> Some (Tiling.H, Tiling.Before)
+  | "down"  -> Some (Tiling.H, Tiling.After)
+  | _ -> None
+
+let arrow_of_string = function
+  | "left"  -> Some Tiling.Left
+  | "right" -> Some Tiling.Right
+  | "up"    -> Some Tiling.Up
+  | "down"  -> Some Tiling.Down
+  | _ -> None
 
 let html_page = {|<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Nachum — Tiling Window Manager</title>
+<title>Nachum — Schroder Tilings</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: flex;
@@ -208,8 +205,6 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
 </head>
 <body>
 <div class="header">
-  <span>Policy:</span>
-  <select id="policy"></select>
   <span>Tiles:</span>
   <select id="n-tiles"></select>
   <button id="random">Random</button>
@@ -230,16 +225,13 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
 <div class="info"><span class="label">After: </span> <span id="term"></span></div>
 <div class="info-row">
   <div class="info"><span class="label">Action:</span> <span id="action"></span></div>
-</div>
-<div class="info-row">
-  <div class="info"><span class="label">Rules: </span> <span id="rules"></span></div>
   <button class="copy-btn" id="copy" title="Copy transition to clipboard">copy</button>
 </div>
 <div class="help">
   Click tile to select &middot;
-  <kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> move &middot;
+  <kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> move selection &middot;
   <kbd>Alt</kbd>+Arrow split &middot;
-  <kbd>Del</kbd> close &middot;
+  <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
   <kbd>Ctrl+Z</kbd> undo &middot;
   <kbd>Esc</kbd> deselect
 </div>
@@ -265,7 +257,6 @@ function updateDisplay(data) {
   c.innerHTML = makeSvg(data.svg, 500, 400);
   document.getElementById('term').textContent = data.term;
 
-  // Previous panel
   const pc = document.getElementById('prev-container');
   const pl = document.getElementById('prev-label');
   if (data.prev_svg) {
@@ -281,9 +272,7 @@ function updateDisplay(data) {
   }
 
   document.getElementById('action').textContent = data.command || '';
-  document.getElementById('rules').textContent = data.rules || '';
 
-  // Update tiles dropdown
   const nSel = document.getElementById('n-tiles');
   if (nSel.value !== String(data.n_tiles)) {
     nSel.value = String(data.n_tiles);
@@ -293,23 +282,11 @@ function updateDisplay(data) {
     selectedTile = data.selected;
   }
 
-  // Attach click handlers
   c.querySelectorAll('g[data-tile]').forEach(g => {
     g.addEventListener('click', () => {
       selectedTile = parseInt(g.dataset.tile);
       refreshState();
     });
-  });
-}
-
-function initPolicies(data) {
-  const sel = document.getElementById('policy');
-  sel.innerHTML = '';
-  data.policies.forEach(p => {
-    const o = document.createElement('option');
-    o.value = p; o.textContent = p;
-    if (p === data.policy) o.selected = true;
-    sel.appendChild(o);
   });
 }
 
@@ -330,30 +307,14 @@ async function refreshState() {
 }
 
 async function postCommand(action, tile, dir) {
-  const body = { action, tile };
+  const body = { action, tile: String(tile) };
   if (dir) body.dir = dir;
-  const data = await api('POST', '/api/command' +
-    (selectedTile !== null ? '?selected=' + selectedTile : ''), body);
+  const data = await api('POST', '/api/command', body);
   if (data.selected !== null && data.selected !== undefined) {
     selectedTile = data.selected;
   }
-  // Re-fetch with correct selection to get highlighted SVG
-  const s = await api('GET', '/api/state?selected=' + selectedTile);
-  // Preserve the command/rules from the command response
-  s.command = data.command;
-  s.rules = data.rules;
-  s.prev_svg = data.prev_svg;
-  s.prev_term = data.prev_term;
-  updateDisplay(s);
-}
-
-document.getElementById('policy').addEventListener('change', async (e) => {
-  const url = selectedTile !== null
-    ? '/api/policy?selected=' + selectedTile
-    : '/api/policy';
-  const data = await api('POST', url, { policy: e.target.value });
   updateDisplay(data);
-});
+}
 
 document.getElementById('reset').addEventListener('click', async () => {
   selectedTile = 0;
@@ -369,7 +330,6 @@ document.getElementById('random').addEventListener('click', async () => {
   updateDisplay(data);
 });
 
-
 document.getElementById('undo').addEventListener('click', async () => {
   const data = await api('POST', '/api/undo');
   selectedTile = data.selected;
@@ -379,11 +339,9 @@ document.getElementById('undo').addEventListener('click', async () => {
 document.getElementById('copy').addEventListener('click', () => {
   const d = currentData;
   const lines = [];
-  lines.push('policy: ' + document.getElementById('policy').value);
   if (d.prev_term) lines.push('before: ' + d.prev_term);
   lines.push('after:  ' + (d.term || ''));
   if (d.command) lines.push('action: ' + d.command);
-  if (d.rules) lines.push('rules:  ' + d.rules);
   navigator.clipboard.writeText(lines.join('\n')).then(() => {
     const btn = document.getElementById('copy');
     btn.textContent = 'copied!';
@@ -399,22 +357,26 @@ document.addEventListener('keydown', (e) => {
   if (selectedTile === null) return;
   const dir = { ArrowLeft: 'left', ArrowRight: 'right',
                  ArrowUp: 'up', ArrowDown: 'down' }[e.key];
-  if (!dir) {
+  if (e.altKey) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault(); postCommand('close', selectedTile); return;
     }
-    return;
+    if (dir) { e.preventDefault(); postCommand('split', selectedTile, dir); }
+  } else if (dir) {
+    e.preventDefault();
+    api('POST', '/api/navigate', { tile: String(selectedTile), dir })
+      .then(data => {
+        if (data.selected !== null && data.selected !== undefined) {
+          selectedTile = data.selected;
+        }
+        updateDisplay(data);
+      });
   }
-  e.preventDefault();
-  if (e.altKey) postCommand('split', selectedTile, dir);
-  else postCommand('move', selectedTile, dir);
 });
 
-// Init
 (async () => {
   initTilesDropdown();
   const data = await api('GET', '/api/state?selected=0');
-  initPolicies(data);
   updateDisplay(data);
 })();
 </script>
@@ -442,86 +404,67 @@ let () =
       Lwt.bind (Dream.body req) (fun body ->
         let action = parse_json_field body "action" in
         let tile = parse_json_field body "tile" in
-        let dir = Option.bind (parse_json_field body "dir") dir_of_string in
+        let split_info = Option.bind (parse_json_field body "dir") split_of_string in
         match action, tile with
         | Some action, Some tile_s ->
           let tile = int_of_string tile_s in
-          let policy = Policy.find state.policy_name in
-          let cmd = match action with
-            | "move" ->
-              (match dir with Some d -> Some (Command.Move (tile, d)) | None -> None)
+          let prev = state.tiling in
+          let cmd_name, new_tiling = match action with
             | "split" ->
-              (match dir with Some d -> Some (Command.Split (tile, d)) | None -> None)
-            | "close" -> Some (Command.Close tile)
-            | _ -> None
+              let d, side = match split_info with
+                | Some (d, s) -> d, s
+                | None -> Tiling.H, Tiling.After
+              in
+              let dir_s = match d with Tiling.H -> "H" | Tiling.V -> "V" in
+              let side_s = match side with Tiling.Before -> "before" | Tiling.After -> "after" in
+              Printf.sprintf "split %d %s %s" tile dir_s side_s,
+              Tiling.split ~side tile d state.tiling
+            | "close" ->
+              Printf.sprintf "close %d" tile,
+              (if Tiling.size state.tiling > 1
+               then Tiling.close tile state.tiling
+               else state.tiling)
+            | _ -> "?", state.tiling
           in
-          (match cmd with
-           | Some cmd ->
-             push_history ();
-             let prev = state.term in
-             let rules = Policy.compile policy cmd state.term in
-             let new_term = List.fold_left (fun t r -> Rewrite.apply r t) state.term rules in
-             state.prev_term <- Some prev;
-             state.term <- new_term;
-             state.last_command <- Some (Command.to_string cmd);
-             state.last_rules <- Some (Command.rule_list_to_string rules);
-             (* Selection logic *)
-             let new_leaves = leaf_set new_term in
-             (match action with
-              | "split" ->
-                (* Select the newly created tile *)
-                let old_leaves = leaf_set prev in
-                let created = List.find_opt
-                  (fun n -> not (List.mem n old_leaves)) new_leaves in
-                state.selected <- (match created with Some n -> Some n | None -> Some tile)
-              | "close" ->
-                (* After close, select tile 0 if it exists, else first *)
-                if not (List.mem tile new_leaves) then
-                  state.selected <- (match new_leaves with n :: _ -> Some n | [] -> None)
-                else
-                  state.selected <- Some tile
-              | _ ->
-                if List.mem tile new_leaves then
-                  state.selected <- Some tile
-                else
-                  state.selected <- (match new_leaves with n :: _ -> Some n | [] -> None));
-             (* Get selected for query param override *)
-             let sel_override = get_selected req in
-             if sel_override <> None then state.selected <- sel_override;
-             Dream.json (state_json ())
-           | None ->
-             Dream.json ~status:`Bad_Request {|{"error":"invalid command"}|})
+          push_history ();
+          state.prev_tiling <- Some prev;
+          state.tiling <- new_tiling;
+          state.last_command <- Some cmd_name;
+          (* Selection logic *)
+          let new_leaves = List.sort compare (Tiling.leaves new_tiling) in
+          (match action with
+           | "split" ->
+             let old_leaves = List.sort compare (Tiling.leaves prev) in
+             let created = List.find_opt
+               (fun n -> not (List.mem n old_leaves)) new_leaves in
+             state.selected <- (match created with Some n -> Some n | None -> Some tile)
+           | "close" ->
+             if not (List.mem tile new_leaves) then
+               state.selected <- (match new_leaves with n :: _ -> Some n | [] -> None)
+             else
+               state.selected <- Some tile
+           | _ ->
+             state.selected <- Some tile);
+          Dream.json (state_json ())
         | _ ->
           Dream.json ~status:`Bad_Request {|{"error":"missing action or tile"}|}));
 
-    Dream.post "/api/policy" (fun req ->
-      Lwt.bind (Dream.body req) (fun body ->
-        match parse_json_field body "policy" with
-        | Some p ->
-          state.policy_name <- p;
-          state.selected <- get_selected req;
-          Dream.json (state_json ())
-        | None ->
-          Dream.json ~status:`Bad_Request {|{"error":"missing policy"}|}));
-
     Dream.post "/api/reset" (fun _req ->
-      state.term <- state.origin;
-      state.prev_term <- None;
+      state.tiling <- (false, Schrot.Tile 0);
+      state.prev_tiling <- None;
       state.selected <- Some 0;
       state.last_command <- None;
-      state.last_rules <- None;
       state.history <- [];
       Dream.json (state_json ()));
 
     Dream.post "/api/undo" (fun _req ->
       (match state.history with
-       | (prev_term, prev_sel) :: rest ->
-         state.prev_term <- Some state.term;
-         state.term <- prev_term;
+       | (prev, prev_sel) :: rest ->
+         state.prev_tiling <- Some state.tiling;
+         state.tiling <- prev;
          state.selected <- prev_sel;
          state.history <- rest;
-         state.last_command <- Some "undo";
-         state.last_rules <- Some "[]"
+         state.last_command <- Some "undo"
        | [] -> ());
       Dream.json (state_json ()));
 
@@ -531,13 +474,25 @@ let () =
           | Some s -> (try int_of_string s with _ -> 3)
           | None -> 3
         in
-        let t = random_term n in
-        state.term <- t;
-        state.origin <- t;
-        state.prev_term <- None;
+        let t = random_tiling n in
+        state.tiling <- t;
+        state.prev_tiling <- None;
         state.selected <- Some 0;
         state.last_command <- None;
-        state.last_rules <- None;
         state.history <- [];
         Dream.json (state_json ())));
+
+    Dream.post "/api/navigate" (fun _req ->
+      Lwt.bind (Dream.body _req) (fun body ->
+        let tile = parse_json_field body "tile" in
+        let dir = Option.bind (parse_json_field body "dir") arrow_of_string in
+        match tile, dir with
+        | Some tile_s, Some arrow ->
+          let tile = int_of_string tile_s in
+          (match Tiling.neighbor tile arrow state.tiling with
+           | Some n -> state.selected <- Some n
+           | None -> ());
+          Dream.json (state_json ())
+        | _ ->
+          Dream.json ~status:`Bad_Request {|{"error":"missing tile or dir"}|}));
   ]

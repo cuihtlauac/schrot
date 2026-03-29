@@ -43,16 +43,9 @@ module Positional : S = struct
       if rules = [] then
         before = after
       else
-        let rects_before = Geometry.interpret before in
-        let rects_after = Geometry.interpret after in
-        (match List.assoc_opt n rects_before, List.assoc_opt n rects_after with
-         | Some rb, Some ra ->
-           (match dir with
-            | Left  -> Geometry.center_x ra < Geometry.center_x rb -. 1e-9
-            | Right -> Geometry.center_x ra > Geometry.center_x rb +. 1e-9
-            | Up    -> Geometry.center_y ra < Geometry.center_y rb -. 1e-9
-            | Down  -> Geometry.center_y ra > Geometry.center_y rb +. 1e-9)
-         | _ -> false)
+        let path_before = Command.find_path n before in
+        let path_after = Command.find_path n after in
+        Path.center_moved dir path_before path_after
     | Command.Split (n, _) ->
       leaf_count after = leaf_count before + 1
       && List.mem n (leaf_set after)
@@ -102,22 +95,12 @@ module Dominance : S = struct
       if rules = [] then
         before = after
       else
-        let rects_before = Geometry.interpret before in
-        let rects_after = Geometry.interpret after in
-        (match List.assoc_opt n rects_before, List.assoc_opt n rects_after with
-         | Some rb, Some ra ->
-           (* Center moved OR edge extent increased *)
-           let center_moved = match dir with
-             | Left  -> Geometry.center_x ra < Geometry.center_x rb -. 1e-9
-             | Right -> Geometry.center_x ra > Geometry.center_x rb +. 1e-9
-             | Up    -> Geometry.center_y ra < Geometry.center_y rb -. 1e-9
-             | Down  -> Geometry.center_y ra > Geometry.center_y rb +. 1e-9
-           in
-           let edge = dir_to_wall dir in
-           let ext_before = Geometry.edge_extent edge n before in
-           let ext_after = Geometry.edge_extent edge n after in
-           center_moved || ext_after > ext_before +. 1e-9
-         | _ -> false)
+        let path_before = Command.find_path n before in
+        let path_after = Command.find_path n after in
+        let center_moved = Path.center_moved dir path_before path_after in
+        let wall = dir_to_wall dir in
+        let extent_grew = Path.extent_increased wall path_before path_after in
+        center_moved || extent_grew
     | Command.Split (n, _) ->
       leaf_count after = leaf_count before + 1
       && List.mem n (leaf_set after)
@@ -217,21 +200,12 @@ module Territorial : S = struct
       if rules = [] then
         before = after
       else
-        let rects_before = Geometry.interpret before in
-        let rects_after = Geometry.interpret after in
-        (match List.assoc_opt n rects_before, List.assoc_opt n rects_after with
-         | Some rb, Some ra ->
-           let center_moved = match dir with
-             | Left  -> Geometry.center_x ra < Geometry.center_x rb -. 1e-9
-             | Right -> Geometry.center_x ra > Geometry.center_x rb +. 1e-9
-             | Up    -> Geometry.center_y ra < Geometry.center_y rb -. 1e-9
-             | Down  -> Geometry.center_y ra > Geometry.center_y rb +. 1e-9
-           in
-           let edge = dir_to_wall dir in
-           let ext_before = Geometry.edge_extent edge n before in
-           let ext_after = Geometry.edge_extent edge n after in
-           center_moved || ext_after > ext_before +. 1e-9
-         | _ -> false)
+        let path_before = Command.find_path n before in
+        let path_after = Command.find_path n after in
+        let center_moved = Path.center_moved dir path_before path_after in
+        let wall = dir_to_wall dir in
+        let extent_grew = Path.extent_increased wall path_before path_after in
+        center_moved || extent_grew
     | Command.Split (n, _) ->
       leaf_count after = leaf_count before + 1
       && List.mem n (leaf_set after)
