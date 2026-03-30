@@ -177,40 +177,6 @@ let neighbor n arrow tiling =
 
 (* --- Rational intervals --- *)
 
-type interval = { num: int; den: int }
-
-(* Tile interval on the given axis: [num/den, (num+1)/den).
-   Walk root-to-tile, at each ancestor frame whose orientation matches the axis,
-   accumulate num = num * arity + index, den = den * arity. *)
-let tile_interval ~axis n tiling =
-  let axis_is_h = (axis = H) in
-  let rec go num den is_h = function
-    | Schrot.Tile k ->
-      if k = n then Some { num; den }
-      else None
-    | Schrot.Frame children ->
-      let arity = List2.length children in
-      let rec try_children i = function
-        | [] -> None
-        | child :: rest ->
-          let num', den' =
-            if is_h = axis_is_h then (num * arity + i, den * arity)
-            else (num, den)
-          in
-          (match go num' den' (not is_h) child with
-           | Some _ as r -> r
-           | None -> try_children (i + 1) rest)
-      in
-      try_children 0 (List2.to_list children)
-  in
-  match go 0 1 (is_h tiling) (tree tiling) with
-  | Some iv -> iv
-  | None -> invalid_arg "Tiling.tile_interval: tile not found"
-
-let intervals_overlap a b =
-  let lo = max (a.num * b.den) (b.num * a.den) in
-  let hi = min ((a.num + 1) * b.den) ((b.num + 1) * a.den) in
-  hi > lo
 
 let rec gcd a b = if b = 0 then a else gcd b (a mod b)
 
@@ -233,31 +199,6 @@ let init_splits tree =
   in
   go tree
 
-(* Add a small deterministic perturbation seeded by [salt] to break symmetry.
-   Each frame's cuts are nudged by a pseudo-random amount in [-eps, +eps]. *)
-let perturb_splits ~salt ~eps st =
-  let state = ref salt in
-  let next () =
-    (* Simple LCG: period 2^31, good enough for symmetry breaking *)
-    state := (!state * 1103515245 + 12345) land 0x7fffffff;
-    float_of_int !state /. float_of_int 0x7fffffff
-  in
-  let rec go = function
-    | SLeaf _ -> ()
-    | SFrame { pos; children } ->
-      let k = Array.length pos - 1 in
-      for i = 1 to k - 1 do
-        let r = next () *. 2. -. 1. in (* in [-1, 1] *)
-        pos.(i) <- pos.(i) +. r *. eps
-      done;
-      (* Ensure monotonicity: clamp to [pos.(i-1)+tiny, pos.(i+1)-tiny] *)
-      let tiny = eps *. 0.01 in
-      for i = 1 to k - 1 do
-        pos.(i) <- max (pos.(i - 1) +. tiny) (min (pos.(i + 1) -. tiny) pos.(i))
-      done;
-      List2.iter go children
-  in
-  go st
 
 (* Collect tile rectangles and cut segments from a split tree.
    Each cut records its owning frame's pos array and index, so repulsion
@@ -349,57 +290,70 @@ let find_boundary_groups cuts eps =
   !groups
 
 (* Resolve junctions by iterative relaxation toward evenly spaced targets.
-   The salt is a deterministic seed for the LCG that breaks symmetry.
 
-   Strategy:
-   1. From equal-split geometry, find boundary groups (2+ cuts terminating
-      at the same parent cut).
-   2. Apply salt to break symmetry.
-   3. For each group of n cuts along a boundary spanning [lo, hi],
-      compute n evenly spaced targets: lo + j*(hi-lo)/(n+1) for j=1..n.
-      Assign by salt-perturbed order.
-   4. Convert absolute targets to frame-relative coordinates.
-   5. Iterate relaxation: pos += alpha * (target - pos).
-      Cuts appearing in multiple groups get the average of their targets. *)
-let resolve_splits ?(salt = 42) ?(max_iter = 40) tiling =
+   Deterministic NW-SE diagonal bias: at each boundary group, cuts from
+   the "before" child (whose span ends at the boundary) get smaller target
+   slots, cuts from the "after" child (whose span starts at the boundary)
+   get larger slots.  This always picks the top-left to bottom-right
+   diagonal at cross junctions.
+
+   References:
+   - Eppstein et al. 2009, "Area-Universal Rectangular Layouts": adjacency
+     in non-one-sided layouts depends on split ratios; point contact is
+     excluded from adjacency.
+   - Zeidler et al. 2017, "Tiling Algebra": tabstops as shared constraint
+     variables; adjacency = shared tabstop with positive-length boundary.
+   - Baez 2022, "Guillotine Partitions and the Hipparchus Operad":
+     bijection between guillotine partitions and Schroeder trees. *)
+let resolve_splits ?(max_iter = 40) tiling =
   let st = init_splits (tree tiling) in
   let is_h_root = is_h tiling in
-  (* Detect from exact equal-split positions *)
   let (_, cuts_eq) = collect_geometry is_h_root st in
   let groups = find_boundary_groups cuts_eq 1e-9 in
   if groups = [] then st
   else begin
-    (* Apply salt to break symmetry *)
-    perturb_splits ~salt ~eps:1e-4 st;
-    (* Recompute geometry after salt to get perturbed abs_pos for ordering *)
-    let (_, cuts_salted) = collect_geometry is_h_root st in
-    (* Build lookup: (frame_id, cut_idx) -> salted abs_pos *)
-    let salted_pos : (int * int, float) Hashtbl.t = Hashtbl.create 16 in
-    List.iter (fun c ->
-      Hashtbl.replace salted_pos (c.frame_id, c.cut_idx) c.abs_pos
-    ) cuts_salted;
-    (* Compute targets for each boundary group.
-       Key = (frame_id, cut_idx), immutable and stable across mutations. *)
+    (* For each boundary group, determine the boundary position and sort
+       cuts into before-children (span_hi = boundary) then after-children
+       (span_lo = boundary), each sub-sorted by equal-split abs_pos.
+       This deterministically picks the NW-SE diagonal. *)
     let all_targets : (int * int, float list) Hashtbl.t = Hashtbl.create 16 in
     let add_target key target =
       let prev = try Hashtbl.find all_targets key with Not_found -> [] in
       Hashtbl.replace all_targets key (target :: prev)
     in
+    let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
     List.iter (fun (span_lo, span_hi, group) ->
       let n = List.length group in
+      (* Find the boundary position: it's the span endpoint shared by the
+         terminating cuts (span_hi for before-children, span_lo for after) *)
+      let boundary = match group with
+        | c :: _ ->
+          (* The boundary cut's abs_pos is c's span_lo or span_hi *)
+          let mid = (c.span_lo +. c.span_hi) /. 2. in
+          if mid < (span_lo +. span_hi) /. 2. then c.span_hi else c.span_lo
+        | [] -> 0.
+      in
+      (* Sort: before-children first (span_hi ≈ boundary, smaller slots),
+         then after-children (span_lo ≈ boundary, larger slots).
+         Within each group, sort by abs_pos (ascending). *)
+      let eps = 1e-9 in
+      let is_before c = abs_float (c.span_hi -. boundary) < eps in
       let sorted = List.sort (fun a b ->
-        let pa = try Hashtbl.find salted_pos (a.frame_id, a.cut_idx)
-                 with Not_found -> a.abs_pos in
-        let pb = try Hashtbl.find salted_pos (b.frame_id, b.cut_idx)
-                 with Not_found -> b.abs_pos in
-        compare pa pb
+        let ba = is_before a and bb = is_before b in
+        if ba && not bb then -1
+        else if not ba && bb then 1
+        else compare a.abs_pos b.abs_pos
       ) group in
+      (* Assign evenly spaced targets *)
       List.iteri (fun i c ->
         let j = i + 1 in
         let target_abs = span_lo +. float_of_int j *. (span_hi -. span_lo)
                          /. float_of_int (n + 1) in
         let target_rel = (target_abs -. c.frame_origin) /. c.frame_span in
-        add_target (c.frame_id, c.cut_idx) target_rel
+        let key = (c.frame_id, c.cut_idx) in
+        add_target key target_rel;
+        if not (Hashtbl.mem owner_of key) then
+          Hashtbl.replace owner_of key (c.owner, c.cut_idx)
       ) sorted
     ) groups;
     (* Merge multiple targets per cut into their average *)
@@ -410,15 +364,14 @@ let resolve_splits ?(salt = 42) ?(max_iter = 40) tiling =
       let avg = List.fold_left ( +. ) 0. targets /. float_of_int n in
       Hashtbl.replace final_targets key avg
     ) all_targets;
-    (* Map keys to owner arrays *)
-    let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
-    List.iter (fun (_, _, group) ->
-      List.iter (fun c ->
-        let key = (c.frame_id, c.cut_idx) in
-        if not (Hashtbl.mem owner_of key) then
-          Hashtbl.replace owner_of key (c.owner, c.cut_idx)
-      ) group
-    ) groups;
+    (* Apply a small fixed offset toward each target to seed relaxation *)
+    Hashtbl.iter (fun key target ->
+      match Hashtbl.find_opt owner_of key with
+      | Some (owner, idx) ->
+        let offset = 1e-4 *. (if target > owner.(idx) then 1. else -1.) in
+        owner.(idx) <- owner.(idx) +. offset
+      | None -> ()
+    ) final_targets;
     (* Iterate relaxation *)
     let alpha = 0.3 in
     for _ = 1 to max_iter do
@@ -431,7 +384,7 @@ let resolve_splits ?(salt = 42) ?(max_iter = 40) tiling =
       (* Clamp monotonicity *)
       let clamped = Hashtbl.create 8 in
       Hashtbl.iter (fun _ (owner, _) ->
-        let id = Hashtbl.hash owner in (* physical identity via hash *)
+        let id = Hashtbl.hash owner in
         if not (Hashtbl.mem clamped id) then begin
           Hashtbl.replace clamped id ();
           let k = Array.length owner - 1 in
@@ -452,6 +405,35 @@ let rects_of_split_tree is_h_root st =
   rects
 
 (* --- Degenerate vertex detection --- *)
+
+(* Exact rational interval for a tile on a given axis under equal splits.
+   Used only for degenerate vertex detection (cross junctions). *)
+type interval = { num: int; den: int }
+
+let tile_interval ~axis n tiling =
+  let axis_is_h = (axis = H) in
+  let rec go num den is_h = function
+    | Schrot.Tile k ->
+      if k = n then Some { num; den }
+      else None
+    | Schrot.Frame children ->
+      let arity = List2.length children in
+      let rec try_children i = function
+        | [] -> None
+        | child :: rest ->
+          let num', den' =
+            if is_h = axis_is_h then (num * arity + i, den * arity)
+            else (num, den)
+          in
+          (match go num' den' (not is_h) child with
+           | Some _ as r -> r
+           | None -> try_children (i + 1) rest)
+      in
+      try_children 0 (List2.to_list children)
+  in
+  match go 0 1 (is_h tiling) (tree tiling) with
+  | Some iv -> iv
+  | None -> invalid_arg "Tiling.tile_interval: tile not found"
 
 (* A rational point (px/pd, qx/qd) in the unit square *)
 type rational_point = { px: int; pd: int; qx: int; qd: int }
@@ -593,144 +575,37 @@ let degenerate_cuts tiling =
   ) h_cuts;
   List.sort_uniq compare_rpoint !points
 
-(* --- LCA-based adjacency --- *)
-
-type adjacency = North | South | East | West
-
-(* Find the path from root to tile n as list of (index_in_parent, parent_is_h).
-   Returns list from root to leaf. *)
-let find_tile_path n tiling =
-  let rec go is_h = function
-    | Schrot.Tile k -> if k = n then Some [] else None
-    | Schrot.Frame children ->
-      let rec try_ch i = function
-        | [] -> None
-        | child :: rest ->
-          match go (not is_h) child with
-          | Some path -> Some ((i, is_h) :: path)
-          | None -> try_ch (i + 1) rest
-      in
-      try_ch 0 (List2.to_list children)
-  in
-  go (is_h tiling) (tree tiling)
-
-(* Find LCA of two tiles: returns (lca_is_h, child_index_of_a, child_index_of_b)
-   where the indices are the children of the LCA frame containing a and b. *)
-let find_lca a b tiling =
-  match find_tile_path a tiling, find_tile_path b tiling with
-  | Some pa, Some pb ->
-    (* Walk both paths in parallel; they share a prefix up to the LCA *)
-    let rec walk = function
-      | (ia, _) :: ra, (ib, _) :: rb when ia = ib ->
-        (* Same child, keep descending *)
-        walk (ra, rb)
-      | (ia, is_h) :: _, (ib, _) :: _ ->
-        (* Different children: this is the LCA *)
-        Some (is_h, ia, ib)
-      | _ -> None (* one is ancestor of the other, or not found *)
-    in
-    walk (pa, pb)
-  | _ -> None
-
-let touches_cut lca_is_h ~first sub_path =
-  (* [first] = true means the tile must touch the boundary toward the first
-     child (top for H, left for V) of same-orientation frames.
-     [first] = false means toward the last child. *)
-  List.for_all (fun (idx, arity, frame_is_h) ->
-    if frame_is_h <> lca_is_h then true
-    else if first then idx = 0
-    else idx = arity - 1
-  ) sub_path
-
-(* Depth of the LCA of two tiles (length of common path prefix) *)
+(* Depth of the lowest common ancestor of two tiles in the tree.
+   This is the length of the common path prefix from root to each tile. *)
 let lca_depth a b tiling =
-  match find_tile_path a tiling, find_tile_path b tiling with
+  let find_path n =
+    let rec go is_h = function
+      | Schrot.Tile k -> if k = n then Some [] else None
+      | Schrot.Frame children ->
+        let rec try_ch i = function
+          | [] -> None
+          | child :: rest ->
+            match go (not is_h) child with
+            | Some path -> Some (i :: path)
+            | None -> try_ch (i + 1) rest
+        in
+        try_ch 0 (List2.to_list children)
+    in
+    go (is_h tiling) (tree tiling)
+  in
+  match find_path a, find_path b with
   | Some pa, Some pb ->
     let rec walk depth pa pb =
       match pa, pb with
-      | (ia, _) :: ra, (ib, _) :: rb when ia = ib -> walk (depth + 1) ra rb
+      | ia :: ra, ib :: rb when ia = ib -> walk (depth + 1) ra rb
       | _ -> depth
     in
     walk 0 pa pb
   | _ -> 0
 
-let lca_adjacent_with_depth a b tiling =
-  match find_tile_path a tiling, find_tile_path b tiling with
-  | Some pa, Some pb ->
-    let rec walk depth pa pb =
-      match pa, pb with
-      | (ia, _) :: ra, (ib, _) :: rb when ia = ib ->
-        walk (depth + 1) ra rb
-      | (ia, is_h) :: _, (ib, _) :: _ when abs (ia - ib) = 1 ->
-        Some (depth, is_h, ia, ib)
-      | _ -> None
-    in
-    (match walk 0 pa pb with
-     | None -> None
-     | Some (lca_depth, lca_is_h, ia, ib) ->
-       (* Enrich sub-paths with arity info for touches_cut *)
-       let enrich_path tile_id =
-         let rec go is_h = function
-           | Schrot.Tile _ -> []
-           | Schrot.Frame children ->
-             let arity = List2.length children in
-             let rec try_ch i = function
-               | [] -> []
-               | child :: rest ->
-                 let sub = go (not is_h) child in
-                 if sub <> [] || (match child with Schrot.Tile k -> k = tile_id | _ -> false)
-                 then (i, arity, is_h) :: sub
-                 else try_ch (i + 1) rest
-             in
-             try_ch 0 (List2.to_list children)
-         in
-         go (is_h tiling) (tree tiling)
-       in
-       (* Get sub-paths with arity: strip common prefix, keep the rest *)
-       let full_a = enrich_path a in
-       let full_b = enrich_path b in
-       let rec skip_common la lb = match la, lb with
-         | (ia2, _, _) :: ra, (ib2, _, _) :: rb when ia2 = ib2 ->
-           skip_common ra rb
-         | _ :: ra, _ :: rb -> (ra, rb)  (* divergence point, skip it *)
-         | _ -> ([], [])
-       in
-       let (sub_a_rich, sub_b_rich) = skip_common full_a full_b in
-       (* Tile in child ia < ib must touch boundary toward child ib:
-          that's the last (bottom/right) edge → first=false.
-          Tile in child ib must touch boundary toward child ia:
-          that's the first (top/left) edge → first=true. *)
-       let a_touches = touches_cut lca_is_h ~first:(ia > ib) sub_a_rich in
-       let b_touches = touches_cut lca_is_h ~first:(ib > ia) sub_b_rich in
-       if not (a_touches && b_touches) then None
-       else
-         let perp_axis = if lca_is_h then V else H in
-         let iva = tile_interval ~axis:perp_axis a tiling in
-         let ivb = tile_interval ~axis:perp_axis b tiling in
-         if not (intervals_overlap iva ivb) then None
-         else
-           let dir = if lca_is_h then
-             (if ia < ib then South else North)
-           else
-             (if ia < ib then East else West)
-           in
-           Some (dir, lca_depth))
-  | _ -> None
-
-let lca_adjacent a b tiling =
-  match lca_adjacent_with_depth a b tiling with
-  | Some (dir, _) -> Some dir
-  | None -> None
-
-let lca_neighbors n tiling =
-  List.filter_map (fun m ->
-    if m = n then None
-    else match lca_adjacent n m tiling with
-      | Some dir -> Some (dir, m)
-      | None -> None
-  ) (leaves tiling)
-
 (* --- Tabstop-based adjacency --- *)
+
+type adjacency = North | South | East | West
 
 type tab = int
 type bounds = { left: tab; right: tab; top: tab; bottom: tab }
@@ -773,32 +648,43 @@ let tabstop_extract tiling =
   go x_left x_right y_top y_bottom (is_h tiling) (tree tiling);
   List.rev !tiles
 
-let tabstop_adjacent a_id b_id bounds_list tiling =
+(* Two tiles are potentially adjacent if they share a tabstop on opposing
+   sides.  This is the maximal potential adjacency set — every pair that is
+   adjacent in some concrete layout of this fragment.  No perpendicular
+   overlap check: that depends on split ratios (Eppstein et al. 2009). *)
+let tabstop_adjacent a_id b_id bounds_list =
   match List.assoc_opt a_id bounds_list, List.assoc_opt b_id bounds_list with
   | Some a, Some b ->
-    (* Check shared tabstop, then verify perpendicular interval overlap *)
-    let candidate =
-      if a.right = b.left then Some (East, H)   (* shared x-tab, check Y overlap *)
-      else if a.left = b.right then Some (West, H)
-      else if a.bottom = b.top then Some (South, V) (* shared y-tab, check X overlap *)
-      else if a.top = b.bottom then Some (North, V)
-      else None
-    in
-    (match candidate with
-     | None -> None
-     | Some (dir, perp_axis) ->
-       let iva = tile_interval ~axis:perp_axis a_id tiling in
-       let ivb = tile_interval ~axis:perp_axis b_id tiling in
-       if intervals_overlap iva ivb then Some dir else None)
+    if a.right = b.left then Some East
+    else if a.left = b.right then Some West
+    else if a.bottom = b.top then Some South
+    else if a.top = b.bottom then Some North
+    else None
   | _ -> None
 
-let tabstop_neighbors n bounds_list tiling =
+let tabstop_neighbors n bounds_list =
   List.filter_map (fun (m, _) ->
     if m = n then None
-    else match tabstop_adjacent n m bounds_list tiling with
+    else match tabstop_adjacent n m bounds_list with
       | Some dir -> Some (dir, m)
       | None -> None
   ) bounds_list
+
+(* All potential adjacency edges: sorted (a, b) pairs with a < b.
+   This is the maximal set — includes both diagonals at cross junctions. *)
+let tabstop_all_adjacencies tiling =
+  let bounds = tabstop_extract tiling in
+  let tiles = List.map fst bounds in
+  let edges = ref [] in
+  List.iter (fun a ->
+    List.iter (fun b ->
+      if a < b then
+        match tabstop_adjacent a b bounds with
+        | Some _ -> edges := (a, b) :: !edges
+        | None -> ()
+    ) tiles
+  ) tiles;
+  List.sort compare !edges
 
 (* --- D4 symmetry group --- *)
 
@@ -941,36 +827,6 @@ let rec canonical_unordered t =
     match sorted with
     | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
     | _ -> assert false
-
-(* --- Adjacency graph --- *)
-
-(* All adjacency edges as sorted (a, b) pairs with a < b. *)
-let adjacency_graph tiling =
-  let tiles = List.sort compare (leaves tiling) in
-  let edges = ref [] in
-  List.iter (fun a ->
-    List.iter (fun b ->
-      if a < b then
-        match lca_adjacent a b tiling with
-        | Some _ -> edges := (a, b) :: !edges
-        | None -> ()
-    ) tiles
-  ) tiles;
-  List.sort compare !edges
-
-(* Adjacency graph with cut depth for each edge *)
-let adjacency_graph_with_depth tiling =
-  let tiles = List.sort compare (leaves tiling) in
-  let edges = ref [] in
-  List.iter (fun a ->
-    List.iter (fun b ->
-      if a < b then
-        match lca_adjacent_with_depth a b tiling with
-        | Some (_, depth) -> edges := (a, b, depth) :: !edges
-        | None -> ()
-    ) tiles
-  ) tiles;
-  !edges
 
 (* Check if two adjacency edge lists (on the same number of vertices)
    are isomorphic, using backtracking permutation search with

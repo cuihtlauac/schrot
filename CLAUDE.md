@@ -22,14 +22,14 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
-- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation), `tile_interval` (exact rational), `tile_interval_perturbed` (float with split perturbation), adjacency via LCA and tabstop methods, D4/V4 symmetry actions and canonical forms, `adjacency_graph`, `graphs_isomorphic`, `adjacency_fingerprint`.
-- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles and adjacency edges computed from perturbed splits. `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`, `fingerprint`, `graphs_isomorphic`.
-- `lib/svg.ml` — SVG rendering. `render_tiling_grid` (Wikipedia-style grid with spectral cut colors, bias for sibling frames, nudge for remaining crosses). `render_tiling_group` (perturbed filled rectangles for web UI). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t). Legacy `render_group`/`render` for binary Term.t.
+- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation). Junction resolution via iterative repulsion (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
+- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `edge_pairs`, `neighbors`, `fingerprint`, `graphs_isomorphic`.
+- `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors, iterative repulsion for junction resolution). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t). Legacy `render_group`/`render` for binary Term.t.
 - `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_shrot_N.svg` (one representative per D4 orbit with tree + adjacency graph), `svg/operations.svg`. Supports `--max-svg N` to skip SVG for large N.
-- `bin/adjacency_check.ml` — Exhaustive verification that LCA and tabstop adjacency methods agree.
+- `bin/adjacency_check.ml` — Verifies geometric adjacency ⊆ tabstop potential adjacency.
 - `bin/topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs.
 - `bin/conjecture_check.ml` — Efficient single-pass verification via fingerprinting.
-- `bin/geom_vs_lca_check.ml` — 3-way comparison: LCA vs tabstop vs geometric adjacency.
+- `bin/cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree.
 
 ### Binary tree layer (legacy, to be migrated)
 
@@ -73,6 +73,25 @@ The core representation is `int Schrot.tiling = bool * int Schrot.t`:
 - H = top-to-bottom (first child = top). V = left-to-right (first child = left).
 - Never use polymorphic variants. Use regular variant types (e.g., `type dir = H | V`).
 - Shorthand: h(0, v(1,2)) = H frame with tile 0 and a V sub-frame containing tiles 1, 2.
+
+## Adjacency model
+
+Two notions of adjacency, both derived from the Schroder tree:
+
+- **Tabstop (potential)**: `tabstop_all_adjacencies` returns all tile pairs sharing a tabstop on opposing sides. This is the maximal set — every pair that is adjacent in *some* concrete layout. Includes both diagonals at cross junctions.
+- **Geometric (authoritative)**: `Geom.of_tiling` computes tile rectangles via `resolve_splits` (iterative repulsion), then finds pairs sharing a boundary of positive length. Excludes point contact. This is the adjacency of the rendered layout.
+
+Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the NW-SE diagonal is deterministically chosen.
+
+### Junction resolution
+
+`resolve_splits` eliminates 3-multiplicity junctions (where 3+ tiles meet at a point) by spreading cuts that terminate at each parent boundary into evenly spaced positions. Deterministic NW-SE bias: cuts from the "before" child get smaller target slots, cuts from the "after" child get larger slots. Relaxation: `pos += 0.3 * (target - pos)` for 40 iterations.
+
+### References
+
+- Zeidler, Weber, Gavryushkin, Lutteroth. "Tiling Algebra for Constraint-based Layout Editing." J. Logical and Algebraic Methods in Programming, 2017. — Tabstops as shared constraint variables; adjacency = shared tabstop.
+- Eppstein, Mumford, Speckmann, Verbeek. "Area-Universal and Constrained Rectangular Layouts." SIAM J. Computing, 2012. — Area-universality iff one-sided; point contact excluded from adjacency; adjacency depends on split ratios in non-one-sided layouts.
+- Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees.
 
 ## Move compilation (binary layer)
 

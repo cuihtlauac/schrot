@@ -49,10 +49,10 @@ let () =
       | [] | [_] -> ()
       | first :: rest ->
         let t1 = label_tiling first in
-        let edges1 = Tiling.adjacency_graph t1 in
+        let edges1 = Tiling.tabstop_all_adjacencies t1 in
         List.iter (fun m ->
           let t2 = label_tiling m in
-          let edges2 = Tiling.adjacency_graph t2 in
+          let edges2 = Tiling.tabstop_all_adjacencies t2 in
           if not (Tiling.graphs_isomorphic n edges1 edges2) then begin
             incr total_errors;
             Printf.printf "  MISMATCH: %s vs %s\n"
