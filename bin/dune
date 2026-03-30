@@ -1,5 +1,5 @@
 (executables
- (names main test_svg model_check reachability tiling_test adjacency_check topology_check conjecture_check cross_check resolved_test resolved_examples)
+ (names main test_svg model_check reachability tiling_test adjacency_check topology_check conjecture_check cross_check)
  (libraries nachum))
 
 (executable
