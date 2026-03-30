@@ -11,10 +11,16 @@ let write_file path content =
   output_string oc content;
   close_out oc
 
-let render_labeled_tiling ~x ~y ~lines tiling =
+let render_labeled_tiling ~x ~y ?top_label ~bottom_lines tiling =
   let buf = Buffer.create 1024 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
+  (match top_label with
+   | Some label ->
+     addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
+           font-family=\"monospace\" fill=\"#666\">%s</text>\n"
+       (x +. margin) (y -. 3.) label
+   | None -> ());
   add (Svg.render_tiling_group ~x ~y ~margin
     ~width:tile_w ~height:tile_h ~show_dots:false tiling);
   let text_y = y +. tile_h +. 6. in
@@ -22,7 +28,7 @@ let render_labeled_tiling ~x ~y ~lines tiling =
     addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
           font-family=\"monospace\" fill=\"black\">%s</text>\n"
       (x +. margin) (text_y +. float_of_int i *. 14.) line
-  ) lines;
+  ) bottom_lines;
   Buffer.contents buf
 
 (* Compare trees: at each level, Tile before Frame, then by arity,
@@ -131,8 +137,9 @@ let enum_page n cols output_dir =
   List.iter (fun (i, tiling, c, r) ->
     let x = gap +. float_of_int c *. cell_w in
     let y = gap +. float_of_int r *. cell_h in
-    let lines = [Printf.sprintf "#%d  %s" i (Tiling.to_string tiling)] in
-    add (render_labeled_tiling ~x ~y ~lines tiling)
+    let top_label = Printf.sprintf "#%d" i in
+    let bottom_lines = [Tiling.to_string tiling] in
+    add (render_labeled_tiling ~x ~y ~top_label ~bottom_lines tiling)
   ) (List.rev !positions);
   (* Render dashed vertical separators *)
   List.iter (fun (sx, r) ->
@@ -180,8 +187,8 @@ let operations_page output_dir =
     let input_s = Tiling.to_string tiling in
     let render col op result =
       let x = gap +. float_of_int col *. cell_w in
-      let lines = [op; "in:  " ^ input_s; "out: " ^ Tiling.to_string result] in
-      add (render_labeled_tiling ~x ~y ~lines result)
+      let bottom_lines = [op; "in:  " ^ input_s; "out: " ^ Tiling.to_string result] in
+      add (render_labeled_tiling ~x ~y ~bottom_lines result)
     in
     render 0 "original" tiling;
     let sh = Tiling.split 0 Tiling.H tiling in
