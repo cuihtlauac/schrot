@@ -100,8 +100,10 @@ let dot_r = 4.
 let dot_gap = 10.
 let dot_row_h = 2. *. dot_r +. 4. (* dots + half text height gap *)
 
-let split_positions = Tiling.split_positions
-
+(* Render a Schroeder tiling with spectral cut lines.
+   Uses iterative repulsion to eliminate 3-multiplicity junctions:
+   starts from equal splits + random salt, then pushes coincident cuts
+   apart until reaching a fixpoint. *)
 let render_tiling_group ~x ~y ~width ~height ~margin
     ?(selected : int option) ?(interactive = false)
     ?(show_labels = true) ?(show_dots = true)
@@ -116,75 +118,59 @@ let render_tiling_group ~x ~y ~width ~height ~margin
   let y0 = y +. margin +. (if has_dots then dot_row_h else 0.) in
   let w0 = width -. 2. *. margin in
   let h0 = height -. 2. *. margin -. (if has_dots then dot_row_h else 0.) in
-  (* Pass 1: tile backgrounds. [parity] alternates per child index
-     to ensure sibling frames use different split ratios. *)
-  let rec tiles x y w h is_h parity = function
-    | Schrot.Tile n ->
-      let fill = if selected = Some n then "#1a3a6b"
-        else match color_of with Some f -> f n | None -> "white" in
-      let text_fill = if selected = Some n then "white" else "black" in
-      if interactive then
-        addf "<g data-tile=\"%d\" style=\"cursor:pointer\">\n" n;
-      addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" fill=\"%s\"/>\n"
-        x y w h fill;
-      if show_labels then
-        addf "<text x=\"%g\" y=\"%g\" text-anchor=\"middle\" \
-              dominant-baseline=\"central\" font-size=\"16\" \
-              fill=\"%s\"%s>%d</text>\n"
-          (x +. w /. 2.) (y +. h /. 2.) text_fill
-          (if interactive then " pointer-events=\"none\"" else "") n;
-      if interactive then add "</g>\n"
-    | Schrot.Frame children ->
-      let k = List2.length children in
-      let pos = split_positions ~parity k in
-      if is_h then
-        List2.iteri (fun i child ->
-          let cy = y +. pos.(i) *. h in
-          let ch = (pos.(i + 1) -. pos.(i)) *. h in
-          tiles x cy w ch (not is_h) (parity <> (i mod 2 = 0)) child
-        ) children
-      else
-        List2.iteri (fun i child ->
-          let cx = x +. pos.(i) *. w in
-          let cw = (pos.(i + 1) -. pos.(i)) *. w in
-          tiles cx y cw h (not is_h) (parity <> (i mod 2 = 0)) child
-        ) children
-  in
-  (* Pass 2: collect cut lines by depth, draw deepest first so shallow
-     cuts paint over deep ones at intersections *)
+  let st = Tiling.resolve_splits tiling in
+  (* Pass 1: tile backgrounds from resolved split tree *)
+  let _ = add in (* used below *)
+  let rects = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  List.iter (fun (n, (r : Tiling.rect)) ->
+    let ox = x0 +. r.rx *. w0 in
+    let oy = y0 +. r.ry *. h0 in
+    let ow = r.rw *. w0 in
+    let oh = r.rh *. h0 in
+    let fill = if selected = Some n then "#1a3a6b"
+      else match color_of with Some f -> f n | None -> "white" in
+    let text_fill = if selected = Some n then "white" else "black" in
+    if interactive then
+      addf "<g data-tile=\"%d\" style=\"cursor:pointer\">\n" n;
+    addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" fill=\"%s\"/>\n"
+      ox oy ow oh fill;
+    if show_labels then
+      addf "<text x=\"%g\" y=\"%g\" text-anchor=\"middle\" \
+            dominant-baseline=\"central\" font-size=\"16\" \
+            fill=\"%s\"%s>%d</text>\n"
+        (ox +. ow /. 2.) (oy +. oh /. 2.) text_fill
+        (if interactive then " pointer-events=\"none\"" else "") n;
+    if interactive then add "</g>\n"
+  ) rects;
+  (* Pass 2: collect cut lines by depth from the split tree *)
   let lines_by_depth = Array.make (max_depth + 1) [] in
-  let rec collect x y w h is_h parity depth = function
-    | Schrot.Tile _ -> ()
-    | Schrot.Frame children ->
+  let rec collect_lines ox oy ow oh is_h depth = function
+    | Tiling.SLeaf _ -> ()
+    | Tiling.SFrame { pos; children } ->
       let k = List2.length children in
-      let pos = split_positions ~parity k in
       if is_h then begin
         for i = 1 to k - 1 do
-          let cy = y +. pos.(i) *. h in
-          lines_by_depth.(depth) <-
-            (x, cy, x +. w, cy) :: lines_by_depth.(depth)
+          let cy = oy +. pos.(i) *. oh in
+          lines_by_depth.(depth) <- (ox, cy, ox +. ow, cy) :: lines_by_depth.(depth)
         done;
         List2.iteri (fun i child ->
-          let cy = y +. pos.(i) *. h in
-          let ch = (pos.(i + 1) -. pos.(i)) *. h in
-          collect x cy w ch (not is_h) (parity <> (i mod 2 = 0)) (depth + 1) child
+          let cy = oy +. pos.(i) *. oh in
+          let ch = (pos.(i + 1) -. pos.(i)) *. oh in
+          collect_lines ox cy ow ch (not is_h) (depth + 1) child
         ) children
       end else begin
         for i = 1 to k - 1 do
-          let cx = x +. pos.(i) *. w in
-          lines_by_depth.(depth) <-
-            (cx, y, cx, y +. h) :: lines_by_depth.(depth)
+          let cx = ox +. pos.(i) *. ow in
+          lines_by_depth.(depth) <- (cx, oy, cx, oy +. oh) :: lines_by_depth.(depth)
         done;
         List2.iteri (fun i child ->
-          let cx = x +. pos.(i) *. w in
-          let cw = (pos.(i + 1) -. pos.(i)) *. w in
-          collect cx y cw h (not is_h) (parity <> (i mod 2 = 0)) (depth + 1) child
+          let cx = ox +. pos.(i) *. ow in
+          let cw = (pos.(i + 1) -. pos.(i)) *. ow in
+          collect_lines cx oy cw oh (not is_h) (depth + 1) child
         ) children
       end
   in
-  let is_h = Tiling.is_h tiling in
-  tiles x0 y0 w0 h0 is_h true tree;
-  collect x0 y0 w0 h0 is_h true 0 tree;
+  collect_lines x0 y0 w0 h0 (Tiling.is_h tiling) 0 st;
   (* Draw from deepest to shallowest *)
   for depth = max_depth - 1 downto 0 do
     let color = cut_color ~depth ~max_depth in
@@ -194,11 +180,11 @@ let render_tiling_group ~x ~y ~width ~height ~margin
         x1 y1 x2 y2 color
     ) lines_by_depth.(depth)
   done;
-  (* Outer border: grey dashed *)
+  (* Outer border *)
   addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" \
         fill=\"none\" stroke=\"#999\" stroke-width=\"1\" stroke-dasharray=\"4,4\"/>\n"
     x0 y0 w0 h0;
-  (* Color dots: one per cut level, centered above the tiling *)
+  (* Color dots *)
   if show_dots && max_depth > 0 then begin
     let total_w = float_of_int max_depth *. (2. *. dot_r) +.
                   float_of_int (max_depth - 1) *. (dot_gap -. 2. *. dot_r) in
@@ -287,220 +273,6 @@ let render_adjacency_graph ~x ~y ~width ~height (g : Geom.t) =
 
 (* Proportional distribution: each child gets span * s / total,
    remainders distributed left to right. *)
-let distribute_proportional span leaf_counts =
-  let k = List.length leaf_counts in
-  if k = 0 then []
-  else if k = 1 then [span]
-  else
-    let total = List.fold_left ( + ) 0 leaf_counts in
-    let result = Array.make k 0 in
-    let remaining = ref span in
-    let rem_leaves = ref total in
-    for i = 0 to k - 1 do
-      let s = List.nth leaf_counts i in
-      let alloc = if i = k - 1 then !remaining
-        else max 1 (!remaining * s / !rem_leaves) in
-      result.(i) <- alloc;
-      remaining := !remaining - alloc;
-      rem_leaves := !rem_leaves - s
-    done;
-    Array.to_list result
-
-let cumsum sizes =
-  let a = Array.of_list sizes in
-  let arr = Array.make (Array.length a + 1) 0 in
-  Array.iteri (fun i s -> arr.(i + 1) <- arr.(i) + s) a;
-  arr
-
-(* Proportional + 1-cell bias: shift first child +1 / last -1 (or reverse).
-   This ensures sibling frames place cuts at different grid positions. *)
-let distribute_biased ~bias span leaf_counts =
-  let base = distribute_proportional span leaf_counts in
-  let k = List.length base in
-  if k < 2 then base
-  else
-    let arr = Array.of_list base in
-    if not bias then begin
-      if arr.(k - 1) >= 2 then begin
-        arr.(0) <- arr.(0) + 1;
-        arr.(k - 1) <- arr.(k - 1) - 1
-      end
-    end else begin
-      if arr.(0) >= 2 then begin
-        arr.(0) <- arr.(0) - 1;
-        arr.(k - 1) <- arr.(k - 1) + 1
-      end
-    end;
-    Array.to_list arr
-
-(* Grid-based tiling rendering (Wikipedia style).
-   n×n grid, proportional layout. Sibling frames get opposite bias
-   (±1 grid cell) to prevent "+" crosses. *)
-let render_tiling_grid ~x ~y ~width ~height (tiling : Tiling.t) =
-  let buf = Buffer.create 1024 in
-  let addf fmt = Printf.ksprintf (Buffer.add_string buf) fmt in
-  let tree = Tiling.tree tiling in
-  let is_h = Tiling.is_h tiling in
-  let n = Schrot.size tree in
-  let max_depth = Schrot.height tree in
-  if n = 0 then Buffer.contents buf
-  else
-    let mg = 4. in
-    let usable_w = width -. 2. *. mg in
-    let usable_h = height -. 2. *. mg in
-    let scale_x = usable_w /. float_of_int n in
-    let scale_y = usable_h /. float_of_int n in
-    let px gx = x +. mg +. float_of_int gx *. scale_x in
-    let py gy = y +. mg +. float_of_int gy *. scale_y in
-    (* Background grid *)
-    for i = 1 to n - 1 do
-      addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
-            stroke=\"#ddd\" stroke-width=\"0.5\"/>\n"
-        (px i) (py 0) (px i) (py n);
-      addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
-            stroke=\"#ddd\" stroke-width=\"0.5\"/>\n"
-        (px 0) (py i) (px n) (py i)
-    done;
-    addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" \
-          fill=\"none\" stroke=\"#999\" stroke-width=\"1\"/>\n"
-      (px 0) (py 0) usable_w usable_h;
-    (* Pass 1: collect segments as (gx1,gy1,gx2,gy2,depth,is_horiz) in grid coords *)
-    let segments = ref [] in
-    let rec collect gx gy gw gh cur_is_h (bias : bool option) depth = function
-      | Schrot.Tile _ -> ()
-      | Schrot.Frame children ->
-        let ch = List2.to_list children in
-        let k = List.length ch in
-        let leaf_counts = List.map Schrot.size ch in
-        let span = if cur_is_h then gh else gw in
-        let sizes = match bias with
-          | Some b -> distribute_biased ~bias:b span leaf_counts
-          | None -> distribute_proportional span leaf_counts in
-        let sizes_a = Array.of_list sizes in
-        let positions = cumsum sizes in
-        let n_frame_children = List.length (List.filter (function
-          | Schrot.Frame _ -> true | _ -> false) ch) in
-        let frame_idx = ref 0 in
-        if cur_is_h then begin
-          for i = 1 to k - 1 do
-            segments := (gx, gy + positions.(i), gx + gw, gy + positions.(i),
-                         depth, true) :: !segments
-          done;
-          List.iteri (fun i child ->
-            let child_bias = match child with
-              | Schrot.Frame _ when n_frame_children >= 2 ->
-                let b = Some (!frame_idx mod 2 = 1) in
-                incr frame_idx; b
-              | _ -> None in
-            collect gx (gy + positions.(i)) gw sizes_a.(i)
-              (not cur_is_h) child_bias (depth + 1) child
-          ) ch
-        end else begin
-          for i = 1 to k - 1 do
-            segments := (gx + positions.(i), gy, gx + positions.(i), gy + gh,
-                         depth, false) :: !segments
-          done;
-          List.iteri (fun i child ->
-            let child_bias = match child with
-              | Schrot.Frame _ when n_frame_children >= 2 ->
-                let b = Some (!frame_idx mod 2 = 1) in
-                incr frame_idx; b
-              | _ -> None in
-            collect (gx + positions.(i)) gy sizes_a.(i) gh
-              (not cur_is_h) child_bias (depth + 1) child
-          ) ch
-        end
-    in
-    collect 0 0 n n is_h None 0 tree;
-    let segs = !segments in
-    (* Pass 2: detect remaining "+" crosses and nudge deeper segments.
-       A cross: H at y=hy from [hx1,hx2] and V at x=vx from [vy1,vy2],
-       with hx1 < vx < hx2 AND vy1 < hy < vy2. *)
-    let h_segs = List.filter (fun (_, _, _, _, _, h) -> h) segs in
-    let v_segs = List.filter (fun (_, _, _, _, _, h) -> not h) segs in
-    (* For each cross, nudge the DEEPER segment by 0.4 grid cells *)
-    let nudge_amt = 0.4 in
-    let h_nudges : ((int * int * int * int), float) Hashtbl.t = Hashtbl.create 4 in
-    let v_nudges : ((int * int * int * int), float) Hashtbl.t = Hashtbl.create 4 in
-    (* Detect interior crosses: H spans across V, or V spans across H *)
-    List.iter (fun (hx1, hy, hx2, _, hd, _) ->
-      List.iter (fun (vx, vy1, _, vy2, vd, _) ->
-        if vx > hx1 && vx < hx2 && hy > vy1 && hy < vy2 then begin
-          if vd >= hd then begin
-            let key = (vx, vy1, vy2, vd) in
-            if not (Hashtbl.mem v_nudges key) then
-              Hashtbl.replace v_nudges key
-                (if vx - hx1 >= hx2 - vx then -. nudge_amt else nudge_amt)
-          end else begin
-            let key = (hx1, hy, hx2, hd) in
-            if not (Hashtbl.mem h_nudges key) then
-              Hashtbl.replace h_nudges key
-                (if hy - vy1 >= vy2 - hy then -. nudge_amt else nudge_amt)
-          end
-        end
-      ) v_segs
-    ) h_segs;
-    (* Detect double T-junctions: two H segments from opposite sides meet
-       a V segment at the same point, creating a visual cross.
-       H1 ends at (vx, hy) from the left, H2 starts at (vx, hy) from the right. *)
-    List.iter (fun (vx, vy1, _, vy2, vd, _) ->
-      if vy1 < vy2 then begin
-        let h_ending_here = List.filter (fun (_, hy, hx2, _, _, _) ->
-          hx2 = vx && hy > vy1 && hy < vy2) h_segs in
-        let h_starting_here = List.filter (fun (hx1, hy, _, _, _, _) ->
-          hx1 = vx && hy > vy1 && hy < vy2) h_segs in
-        List.iter (fun (_, hy1, _, _, _, _) ->
-          let has_match = List.exists (fun (_, hy2, _, _, _, _) -> hy1 = hy2)
-            h_starting_here in
-          if has_match then begin
-            let key = (vx, vy1, vy2, vd) in
-            if not (Hashtbl.mem v_nudges key) then
-              Hashtbl.replace v_nudges key nudge_amt
-          end
-        ) h_ending_here
-      end
-    ) v_segs;
-    (* Same for two V segments meeting an H segment *)
-    List.iter (fun (hx1, hy, hx2, _, hd, _) ->
-      if hx1 < hx2 then begin
-        let v_ending_here = List.filter (fun (vx, _, _, vy2, _, _) ->
-          vy2 = hy && vx > hx1 && vx < hx2) v_segs in
-        let v_starting_here = List.filter (fun (vx, vy1, _, _, _, _) ->
-          vy1 = hy && vx > hx1 && vx < hx2) v_segs in
-        List.iter (fun (vx1, _, _, _, _, _) ->
-          let has_match = List.exists (fun (vx2, _, _, _, _, _) -> vx1 = vx2)
-            v_starting_here in
-          if has_match then begin
-            let key = (hx1, hy, hx2, hd) in
-            if not (Hashtbl.mem h_nudges key) then
-              Hashtbl.replace h_nudges key nudge_amt
-          end
-        ) v_ending_here
-      end
-    ) h_segs;
-    (* Draw: deepest first, with nudges *)
-    let sorted = List.sort (fun (_, _, _, _, d1, _) (_, _, _, _, d2, _) ->
-      compare d2 d1) segs in
-    List.iter (fun (gx1, gy1, gx2, gy2, depth, is_horiz) ->
-      let color = cut_color ~depth ~max_depth in
-      if is_horiz then begin
-        let key = (gx1, gy1, gx2, depth) in
-        let dy = match Hashtbl.find_opt h_nudges key with
-          | Some d -> d *. scale_y | None -> 0. in
-        addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
-              stroke=\"%s\" stroke-width=\"1.5\"/>\n"
-          (px gx1) (py gy1 +. dy) (px gx2) (py gy2 +. dy) color
-      end else begin
-        let key = (gx1, gy1, gy2, depth) in
-        let dx = match Hashtbl.find_opt v_nudges key with
-          | Some d -> d *. scale_x | None -> 0. in
-        addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
-              stroke=\"%s\" stroke-width=\"1.5\"/>\n"
-          (px gx1 +. dx) (py gy1) (px gx1 +. dx) (py gy2) color
-      end
-    ) sorted;
-    Buffer.contents buf
-
 let render_tiling ~width ~height tiling =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in

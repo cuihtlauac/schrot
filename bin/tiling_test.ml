@@ -15,8 +15,8 @@ let render_labeled_tiling ~x ~y ~lines tiling =
   let buf = Buffer.create 1024 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
-  add (Svg.render_tiling_grid ~x ~y
-    ~width:tile_w ~height:tile_h tiling);
+  add (Svg.render_tiling_group ~x ~y ~margin
+    ~width:tile_w ~height:tile_h ~show_dots:false tiling);
   let text_y = y +. tile_h +. 6. in
   List.iteri (fun i line ->
     addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
@@ -267,9 +267,9 @@ let d4_page n output_dir =
     let row = i / cols in
     let x = gap +. float_of_int col *. cell_w in
     let y = gap +. float_of_int row *. cell_h in
-    (* Tiling (grid-based, no perturbation) *)
-    add (Svg.render_tiling_grid ~x ~y
-      ~width:tile_w ~height:tile_h tiling);
+    (* Tiling with junction-resolved splits *)
+    add (Svg.render_tiling_group ~x ~y ~margin
+      ~width:tile_w ~height:tile_h ~show_dots:false tiling);
     (* Middle column: number label + color dots vertically *)
     let mid_cx = x +. tile_w +. mid_w /. 2. in
     addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \

@@ -1,5 +1,5 @@
 (* Tiling geometry on the unit square.
-   Computes tile rectangles with perturbed split ratios and adjacency from them. *)
+   Computes tile rectangles via iterative repulsion and adjacency from them. *)
 
 type rect = { x: float; y: float; w: float; h: float }
 
@@ -9,30 +9,13 @@ type t = {
   adjacency: (int * int * int) list;  (* (a, b, lca_depth) with a < b *)
 }
 
-(* Compute tile rectangles on [0,1)² using perturbed splits *)
+(* Compute tile rectangles on [0,1)² using repulsion-resolved splits *)
 let compute_rects tiling =
-  let acc = ref [] in
-  let rec go x y w h is_h parity = function
-    | Schrot.Tile n ->
-      acc := (n, { x; y; w; h }) :: !acc
-    | Schrot.Frame children ->
-      let k = List2.length children in
-      let pos = Tiling.split_positions ~parity k in
-      if is_h then
-        List2.iteri (fun i child ->
-          let cy = y +. pos.(i) *. h in
-          let ch = (pos.(i + 1) -. pos.(i)) *. h in
-          go x cy w ch (not is_h) (parity <> (i mod 2 = 0)) child
-        ) children
-      else
-        List2.iteri (fun i child ->
-          let cx = x +. pos.(i) *. w in
-          let cw = (pos.(i + 1) -. pos.(i)) *. w in
-          go cx y cw h (not is_h) (parity <> (i mod 2 = 0)) child
-        ) children
-  in
-  go 0. 0. 1. 1. (Tiling.is_h tiling) true (Tiling.tree tiling);
-  !acc
+  let st = Tiling.resolve_splits tiling in
+  let raw = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  List.map (fun (n, (r : Tiling.rect)) ->
+    (n, { x = r.rx; y = r.ry; w = r.rw; h = r.rh })
+  ) raw
 
 (* Compute adjacency from tile rects: shared boundary segment (not just a point) *)
 let compute_adjacency tiling rects =

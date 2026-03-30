@@ -212,58 +212,244 @@ let intervals_overlap a b =
   let hi = min ((a.num + 1) * b.den) ((b.num + 1) * a.den) in
   hi > lo
 
-(* Perturbed split ratios: slightly asymmetric to avoid accidental "+" junctions.
-   The [parity] parameter flips the perturbation direction so sibling frames
-   of the same arity use different ratios. *)
-let split_positions ~parity k =
-  if k <= 1 then [| 0.; 1. |]
-  else
-    let alpha = 0.15 in
-    let sign = if parity then 1. else -1. in
-    let weights = Array.init k (fun i ->
-      1. +. sign *. alpha *. (2. *. float_of_int i /. float_of_int (k - 1) -. 1.)
-    ) in
-    let total = Array.fold_left ( +. ) 0. weights in
-    let pos = Array.make (k + 1) 0. in
-    for i = 0 to k - 1 do
-      pos.(i + 1) <- pos.(i) +. weights.(i) /. total
-    done;
-    pos
+let rec gcd a b = if b = 0 then a else gcd b (a mod b)
 
-(* Perturbed float interval for a tile on the given axis.
-   Uses the same split_positions as the renderer. *)
-let tile_interval_perturbed ~axis n tiling =
-  let axis_is_h = (axis = H) in
-  let rec go lo hi is_h parity = function
-    | Schrot.Tile k ->
-      if k = n then Some (lo, hi) else None
+(* --- Dynamic junction resolution via repulsion --- *)
+
+(* Mutable split tree: mirrors a Schrot.t but each Frame carries
+   a mutable float array of k+1 cumulative positions in [0, 1]. *)
+type split_tree =
+  | SLeaf of int
+  | SFrame of { mutable pos: float array; children: split_tree List2.t }
+
+let init_splits tree =
+  let rec go = function
+    | Schrot.Tile n -> SLeaf n
     | Schrot.Frame children ->
-      let arity = List2.length children in
-      let pos = split_positions ~parity arity in
-      let rec try_children i = function
-        | [] -> None
-        | child :: rest ->
-          let lo', hi', parity' =
-            if is_h = axis_is_h then
-              let new_lo = lo +. pos.(i) *. (hi -. lo) in
-              let new_hi = lo +. pos.(i + 1) *. (hi -. lo) in
-              (new_lo, new_hi, parity <> (i mod 2 = 0))
-            else
-              (lo, hi, parity <> (i mod 2 = 0))
-          in
-          (match go lo' hi' (not is_h) parity' child with
-           | Some _ as r -> r
-           | None -> try_children (i + 1) rest)
-      in
-      try_children 0 (List2.to_list children)
+      let k = List2.length children in
+      let pos = Array.init (k + 1) (fun i ->
+        float_of_int i /. float_of_int k) in
+      SFrame { pos; children = List2.map go children }
   in
-  match go 0. 1. (is_h tiling) true (tree tiling) with
-  | Some iv -> iv
-  | None -> invalid_arg "Tiling.tile_interval_perturbed: tile not found"
+  go tree
 
-let intervals_overlap_f (lo_a, hi_a) (lo_b, hi_b) =
-  let eps = 1e-9 in
-  min hi_a hi_b -. max lo_a lo_b > eps
+(* Add a small deterministic perturbation seeded by [salt] to break symmetry.
+   Each frame's cuts are nudged by a pseudo-random amount in [-eps, +eps]. *)
+let perturb_splits ~salt ~eps st =
+  let state = ref salt in
+  let next () =
+    (* Simple LCG: period 2^31, good enough for symmetry breaking *)
+    state := (!state * 1103515245 + 12345) land 0x7fffffff;
+    float_of_int !state /. float_of_int 0x7fffffff
+  in
+  let rec go = function
+    | SLeaf _ -> ()
+    | SFrame { pos; children } ->
+      let k = Array.length pos - 1 in
+      for i = 1 to k - 1 do
+        let r = next () *. 2. -. 1. in (* in [-1, 1] *)
+        pos.(i) <- pos.(i) +. r *. eps
+      done;
+      (* Ensure monotonicity: clamp to [pos.(i-1)+tiny, pos.(i+1)-tiny] *)
+      let tiny = eps *. 0.01 in
+      for i = 1 to k - 1 do
+        pos.(i) <- max (pos.(i - 1) +. tiny) (min (pos.(i + 1) -. tiny) pos.(i))
+      done;
+      List2.iter go children
+  in
+  go st
+
+(* Collect tile rectangles and cut segments from a split tree.
+   Each cut records its owning frame's pos array and index, so repulsion
+   can adjust it in place. *)
+type rect = { rx: float; ry: float; rw: float; rh: float }
+
+type cut_seg = {
+  cut_is_h: bool;      (* true = horizontal cut at constant y *)
+  abs_pos: float;       (* position on the cut's own axis *)
+  span_lo: float;       (* span start on perpendicular axis *)
+  span_hi: float;       (* span end on perpendicular axis *)
+  owner: float array;   (* mutable ref to owning frame's positions *)
+  cut_idx: int;         (* index into owner: cut between children [i-1] and [i] *)
+  frame_span: float;    (* owning frame's span on the cut's axis *)
+  frame_origin: float;  (* absolute position of frame's start on the cut's axis *)
+  frame_id: int;        (* unique id for the owning frame, stable across mutations *)
+}
+
+let collect_geometry is_h_root st =
+  let rects = ref [] in
+  let cuts = ref [] in
+  let next_id = ref 0 in
+  let fresh_id () = let id = !next_id in incr next_id; id in
+  let rec go x y w h is_h = function
+    | SLeaf n ->
+      rects := (n, { rx = x; ry = y; rw = w; rh = h }) :: !rects
+    | SFrame { pos; children } ->
+      let k = List2.length children in
+      let fid = fresh_id () in
+      for i = 1 to k - 1 do
+        if is_h then
+          let cy = y +. pos.(i) *. h in
+          cuts := { cut_is_h = true; abs_pos = cy;
+                    span_lo = x; span_hi = x +. w;
+                    owner = pos; cut_idx = i;
+                    frame_span = h; frame_origin = y;
+                    frame_id = fid } :: !cuts
+        else
+          let cx = x +. pos.(i) *. w in
+          cuts := { cut_is_h = false; abs_pos = cx;
+                    span_lo = y; span_hi = y +. h;
+                    owner = pos; cut_idx = i;
+                    frame_span = w; frame_origin = x;
+                    frame_id = fid } :: !cuts
+      done;
+      List2.iteri (fun i child ->
+        if is_h then
+          let cy = y +. pos.(i) *. h in
+          let ch = (pos.(i + 1) -. pos.(i)) *. h in
+          go x cy w ch (not is_h) child
+        else
+          let cx = x +. pos.(i) *. w in
+          let cw = (pos.(i + 1) -. pos.(i)) *. w in
+          go cx y cw h (not is_h) child
+      ) children
+  in
+  go 0. 0. 1. 1. is_h_root st;
+  (!rects, !cuts)
+
+(* Find boundary groups: for each cut, find all perpendicular cuts that
+   terminate at it (their span endpoint matches the cut's position).
+   Each group of 2+ terminating cuts must be spread evenly. *)
+let find_boundary_groups cuts eps =
+  let h_cuts = List.filter (fun c -> c.cut_is_h) cuts in
+  let v_cuts = List.filter (fun c -> not c.cut_is_h) cuts in
+  let groups = ref [] in
+  (* V-cuts terminating at each H-cut *)
+  List.iter (fun hc ->
+    let terms = List.filter (fun vc ->
+      (abs_float (vc.span_lo -. hc.abs_pos) < eps ||
+       abs_float (vc.span_hi -. hc.abs_pos) < eps) &&
+      vc.abs_pos > hc.span_lo +. eps &&
+      vc.abs_pos < hc.span_hi -. eps
+    ) v_cuts in
+    if List.length terms >= 2 then
+      groups := (hc.span_lo, hc.span_hi, terms) :: !groups
+  ) h_cuts;
+  (* H-cuts terminating at each V-cut *)
+  List.iter (fun vc ->
+    let terms = List.filter (fun hc ->
+      (abs_float (hc.span_lo -. vc.abs_pos) < eps ||
+       abs_float (hc.span_hi -. vc.abs_pos) < eps) &&
+      hc.abs_pos > vc.span_lo +. eps &&
+      hc.abs_pos < vc.span_hi -. eps
+    ) h_cuts in
+    if List.length terms >= 2 then
+      groups := (vc.span_lo, vc.span_hi, terms) :: !groups
+  ) v_cuts;
+  !groups
+
+(* Resolve junctions by iterative relaxation toward evenly spaced targets.
+   The salt is a deterministic seed for the LCG that breaks symmetry.
+
+   Strategy:
+   1. From equal-split geometry, find boundary groups (2+ cuts terminating
+      at the same parent cut).
+   2. Apply salt to break symmetry.
+   3. For each group of n cuts along a boundary spanning [lo, hi],
+      compute n evenly spaced targets: lo + j*(hi-lo)/(n+1) for j=1..n.
+      Assign by salt-perturbed order.
+   4. Convert absolute targets to frame-relative coordinates.
+   5. Iterate relaxation: pos += alpha * (target - pos).
+      Cuts appearing in multiple groups get the average of their targets. *)
+let resolve_splits ?(salt = 42) ?(max_iter = 40) tiling =
+  let st = init_splits (tree tiling) in
+  let is_h_root = is_h tiling in
+  (* Detect from exact equal-split positions *)
+  let (_, cuts_eq) = collect_geometry is_h_root st in
+  let groups = find_boundary_groups cuts_eq 1e-9 in
+  if groups = [] then st
+  else begin
+    (* Apply salt to break symmetry *)
+    perturb_splits ~salt ~eps:1e-4 st;
+    (* Recompute geometry after salt to get perturbed abs_pos for ordering *)
+    let (_, cuts_salted) = collect_geometry is_h_root st in
+    (* Build lookup: (frame_id, cut_idx) -> salted abs_pos *)
+    let salted_pos : (int * int, float) Hashtbl.t = Hashtbl.create 16 in
+    List.iter (fun c ->
+      Hashtbl.replace salted_pos (c.frame_id, c.cut_idx) c.abs_pos
+    ) cuts_salted;
+    (* Compute targets for each boundary group.
+       Key = (frame_id, cut_idx), immutable and stable across mutations. *)
+    let all_targets : (int * int, float list) Hashtbl.t = Hashtbl.create 16 in
+    let add_target key target =
+      let prev = try Hashtbl.find all_targets key with Not_found -> [] in
+      Hashtbl.replace all_targets key (target :: prev)
+    in
+    List.iter (fun (span_lo, span_hi, group) ->
+      let n = List.length group in
+      let sorted = List.sort (fun a b ->
+        let pa = try Hashtbl.find salted_pos (a.frame_id, a.cut_idx)
+                 with Not_found -> a.abs_pos in
+        let pb = try Hashtbl.find salted_pos (b.frame_id, b.cut_idx)
+                 with Not_found -> b.abs_pos in
+        compare pa pb
+      ) group in
+      List.iteri (fun i c ->
+        let j = i + 1 in
+        let target_abs = span_lo +. float_of_int j *. (span_hi -. span_lo)
+                         /. float_of_int (n + 1) in
+        let target_rel = (target_abs -. c.frame_origin) /. c.frame_span in
+        add_target (c.frame_id, c.cut_idx) target_rel
+      ) sorted
+    ) groups;
+    (* Merge multiple targets per cut into their average *)
+    let final_targets : (int * int, float) Hashtbl.t =
+      Hashtbl.create (Hashtbl.length all_targets) in
+    Hashtbl.iter (fun key targets ->
+      let n = List.length targets in
+      let avg = List.fold_left ( +. ) 0. targets /. float_of_int n in
+      Hashtbl.replace final_targets key avg
+    ) all_targets;
+    (* Map keys to owner arrays *)
+    let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
+    List.iter (fun (_, _, group) ->
+      List.iter (fun c ->
+        let key = (c.frame_id, c.cut_idx) in
+        if not (Hashtbl.mem owner_of key) then
+          Hashtbl.replace owner_of key (c.owner, c.cut_idx)
+      ) group
+    ) groups;
+    (* Iterate relaxation *)
+    let alpha = 0.3 in
+    for _ = 1 to max_iter do
+      Hashtbl.iter (fun key target ->
+        match Hashtbl.find_opt owner_of key with
+        | Some (owner, idx) ->
+          owner.(idx) <- owner.(idx) +. alpha *. (target -. owner.(idx))
+        | None -> ()
+      ) final_targets;
+      (* Clamp monotonicity *)
+      let clamped = Hashtbl.create 8 in
+      Hashtbl.iter (fun _ (owner, _) ->
+        let id = Hashtbl.hash owner in (* physical identity via hash *)
+        if not (Hashtbl.mem clamped id) then begin
+          Hashtbl.replace clamped id ();
+          let k = Array.length owner - 1 in
+          let tiny = 1e-6 in
+          for i = 1 to k - 1 do
+            owner.(i) <- max (owner.(i - 1) +. tiny)
+              (min (owner.(i + 1) -. tiny) owner.(i))
+          done
+        end
+      ) owner_of
+    done;
+    st
+  end
+
+(* Compute tile rectangles from a resolved split tree *)
+let rects_of_split_tree is_h_root st =
+  let (rects, _) = collect_geometry is_h_root st in
+  rects
 
 (* --- Degenerate vertex detection --- *)
 
@@ -284,8 +470,6 @@ module RPointMap = Map.Make(struct
 end)
 
 let rat_is_interior num den = num > 0 && num < den
-
-let rec gcd a b = if b = 0 then a else gcd b (a mod b)
 
 let normalize_rpoint p =
   let g1 = gcd (abs p.px) (abs p.pd) in
@@ -521,9 +705,9 @@ let lca_adjacent_with_depth a b tiling =
        if not (a_touches && b_touches) then None
        else
          let perp_axis = if lca_is_h then V else H in
-         let iva = tile_interval_perturbed ~axis:perp_axis a tiling in
-         let ivb = tile_interval_perturbed ~axis:perp_axis b tiling in
-         if not (intervals_overlap_f iva ivb) then None
+         let iva = tile_interval ~axis:perp_axis a tiling in
+         let ivb = tile_interval ~axis:perp_axis b tiling in
+         if not (intervals_overlap iva ivb) then None
          else
            let dir = if lca_is_h then
              (if ia < ib then South else North)
@@ -603,9 +787,9 @@ let tabstop_adjacent a_id b_id bounds_list tiling =
     (match candidate with
      | None -> None
      | Some (dir, perp_axis) ->
-       let iva = tile_interval_perturbed ~axis:perp_axis a_id tiling in
-       let ivb = tile_interval_perturbed ~axis:perp_axis b_id tiling in
-       if intervals_overlap_f iva ivb then Some dir else None)
+       let iva = tile_interval ~axis:perp_axis a_id tiling in
+       let ivb = tile_interval ~axis:perp_axis b_id tiling in
+       if intervals_overlap iva ivb then Some dir else None)
   | _ -> None
 
 let tabstop_neighbors n bounds_list tiling =
