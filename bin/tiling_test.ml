@@ -18,8 +18,9 @@ let render_labeled_tiling ~x ~y ?top_label ~bottom_lines tiling =
   (match top_label with
    | Some label ->
      addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
-           font-family=\"monospace\" fill=\"#666\">%s</text>\n"
-       (x +. margin) (y -. 3.) label
+           font-family=\"monospace\" text-anchor=\"middle\" \
+           dominant-baseline=\"auto\" fill=\"#666\">%s</text>\n"
+       (x +. tile_w /. 2.) (y +. 15.) label
    | None -> ());
   add (Svg.render_tiling_group ~x ~y ~margin
     ~width:tile_w ~height:tile_h ~show_dots:false tiling);
