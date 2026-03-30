@@ -259,12 +259,26 @@ let collect_geometry is_h_root st =
   (!rects, !cuts)
 
 (* Find boundary groups: for each cut, find all perpendicular cuts that
-   terminate at it (their span endpoint matches the cut's position).
-   Each group of 2+ terminating cuts must be spread evenly. *)
+   terminate at it.  A group needs resolution only if it contains at
+   least one coincident pair (same abs_pos, different frame_id) — a
+   cross junction.  When resolution is needed, ALL cuts in the group
+   are spread evenly (not just the coincident ones). *)
 let find_boundary_groups cuts eps =
   let h_cuts = List.filter (fun c -> c.cut_is_h) cuts in
   let v_cuts = List.filter (fun c -> not c.cut_is_h) cuts in
   let groups = ref [] in
+  (* Does a group contain at least one coincident pair? *)
+  let has_coincidence terms =
+    let rec check = function
+      | [] -> false
+      | c :: rest ->
+        List.exists (fun d ->
+          c.frame_id <> d.frame_id &&
+          abs_float (c.abs_pos -. d.abs_pos) < eps
+        ) rest || check rest
+    in
+    check terms
+  in
   (* V-cuts terminating at each H-cut *)
   List.iter (fun hc ->
     let terms = List.filter (fun vc ->
@@ -273,7 +287,7 @@ let find_boundary_groups cuts eps =
       vc.abs_pos > hc.span_lo +. eps &&
       vc.abs_pos < hc.span_hi -. eps
     ) v_cuts in
-    if List.length terms >= 2 then
+    if List.length terms >= 2 && has_coincidence terms then
       groups := (hc.span_lo, hc.span_hi, terms) :: !groups
   ) h_cuts;
   (* H-cuts terminating at each V-cut *)
@@ -284,7 +298,7 @@ let find_boundary_groups cuts eps =
       hc.abs_pos > vc.span_lo +. eps &&
       hc.abs_pos < vc.span_hi -. eps
     ) h_cuts in
-    if List.length terms >= 2 then
+    if List.length terms >= 2 && has_coincidence terms then
       groups := (vc.span_lo, vc.span_hi, terms) :: !groups
   ) v_cuts;
   !groups
@@ -309,14 +323,7 @@ let resolve_splits ?(max_iter = 40) tiling =
   let st = init_splits (tree tiling) in
   let is_h_root = is_h tiling in
   let (_, cuts_eq) = collect_geometry is_h_root st in
-  (* Only keep boundary groups where cuts come from 2+ different frames.
-     Same-frame groups (e.g., h(0, v(1,2,3))) have no cross junction
-     and their equal-split positions are already correct. *)
-  let groups = List.filter (fun (_, _, terms) ->
-    match terms with
-    | [] | [_] -> false
-    | first :: rest -> List.exists (fun c -> c.frame_id <> first.frame_id) rest
-  ) (find_boundary_groups cuts_eq 1e-9) in
+  let groups = find_boundary_groups cuts_eq 1e-9 in
   if groups = [] then st
   else begin
     (* For each boundary group, determine the boundary position and sort
