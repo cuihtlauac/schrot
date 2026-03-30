@@ -265,6 +265,150 @@ let intervals_overlap_f (lo_a, hi_a) (lo_b, hi_b) =
   let eps = 1e-9 in
   min hi_a hi_b -. max lo_a lo_b > eps
 
+(* --- Degenerate vertex detection --- *)
+
+(* A rational point (px/pd, qx/qd) in the unit square *)
+type rational_point = { px: int; pd: int; qx: int; qd: int }
+
+let compare_rat (a, b) (c, d) =
+  compare (a * d) (c * b)
+
+let compare_rpoint p1 p2 =
+  let c = compare_rat (p1.px, p1.pd) (p2.px, p2.pd) in
+  if c <> 0 then c
+  else compare_rat (p1.qx, p1.qd) (p2.qx, p2.qd)
+
+module RPointMap = Map.Make(struct
+  type t = rational_point
+  let compare = compare_rpoint
+end)
+
+let rat_is_interior num den = num > 0 && num < den
+
+let rec gcd a b = if b = 0 then a else gcd b (a mod b)
+
+let normalize_rpoint p =
+  let g1 = gcd (abs p.px) (abs p.pd) in
+  let g2 = gcd (abs p.qx) (abs p.qd) in
+  { px = p.px / g1; pd = p.pd / g1;
+    qx = p.qx / g2; qd = p.qd / g2 }
+
+(* Does rational a/b lie in [lo/d, hi/d]? *)
+let rat_in_closed (a, b) (lo, hi, d) =
+  a * d >= lo * b && a * d <= hi * b
+
+(* Approach 1: for each interior point where tile boundaries cross,
+   count how many tile closures contain it.  Multiplicity >= 3 = degenerate.
+   Candidate points are tile corners (every degenerate vertex is a corner
+   of at least one tile).  But a tile can border the point via an edge
+   without having a corner there, so we check all tiles for containment. *)
+let degenerate_corners tiling =
+  let tiles = leaves tiling in
+  (* Collect intervals for all tiles *)
+  let tile_ivs = List.map (fun n ->
+    let iv_h = tile_interval ~axis:H n tiling in
+    let iv_v = tile_interval ~axis:V n tiling in
+    (iv_h, iv_v)
+  ) tiles in
+  (* Collect candidate interior points from tile corners *)
+  let candidates = ref RPointMap.empty in
+  List.iter (fun (iv_h, iv_v) ->
+    let xs = [(iv_v.num, iv_v.den); (iv_v.num + 1, iv_v.den)] in
+    let ys = [(iv_h.num, iv_h.den); (iv_h.num + 1, iv_h.den)] in
+    List.iter (fun (xn, xd) ->
+      List.iter (fun (yn, yd) ->
+        if rat_is_interior xn xd && rat_is_interior yn yd then
+          let p = { px = xn; pd = xd; qx = yn; qd = yd } in
+          candidates := RPointMap.add p () !candidates
+      ) ys
+    ) xs
+  ) tile_ivs;
+  (* For each candidate, count tiles whose closure contains it *)
+  RPointMap.fold (fun pt () acc ->
+    let mult = List.fold_left (fun count (iv_h, iv_v) ->
+      let x_in = rat_in_closed (pt.px, pt.pd)
+        (iv_v.num, iv_v.num + 1, iv_v.den) in
+      let y_in = rat_in_closed (pt.qx, pt.qd)
+        (iv_h.num, iv_h.num + 1, iv_h.den) in
+      if x_in && y_in then count + 1 else count
+    ) 0 tile_ivs in
+    if mult >= 3 then (pt, mult) :: acc else acc
+  ) !candidates []
+  |> List.sort (fun (a, _) (b, _) -> compare_rpoint a b)
+
+(* Approach 3: enumerate all cuts, find (H-cut, V-cut) pairs that intersect.
+   An H-cut is a horizontal segment (constant y); a V-cut is vertical (constant x). *)
+type cut = {
+  pos_num: int; pos_den: int;
+  span_lo: int; span_hi: int; span_den: int;
+}
+
+let collect_cuts tiling =
+  let h_cuts = ref [] and v_cuts = ref [] in
+  let rec walk is_h h_lo h_hi h_den v_lo v_hi v_den = function
+    | Schrot.Tile _ -> ()
+    | Schrot.Frame children ->
+      let k = List2.length children in
+      for i = 1 to k - 1 do
+        if is_h then
+          (* H-frame: horizontal cut at y = (h_lo*k + i) / (h_den*k),
+             spanning x = [v_lo/v_den, v_hi/v_den] *)
+          h_cuts := { pos_num = h_lo * k + i; pos_den = h_den * k;
+                      span_lo = v_lo; span_hi = v_hi; span_den = v_den } :: !h_cuts
+        else
+          (* V-frame: vertical cut at x = (v_lo*k + i) / (v_den*k),
+             spanning y = [h_lo/h_den, h_hi/h_den] *)
+          v_cuts := { pos_num = v_lo * k + i; pos_den = v_den * k;
+                      span_lo = h_lo; span_hi = h_hi; span_den = h_den } :: !v_cuts
+      done;
+      List.iteri (fun i child ->
+        let h_lo', h_hi', h_den', v_lo', v_hi', v_den' =
+          if is_h then
+            (h_lo * k + i, h_lo * k + i + 1, h_den * k, v_lo, v_hi, v_den)
+          else
+            (h_lo, h_hi, h_den, v_lo * k + i, v_lo * k + i + 1, v_den * k)
+        in
+        walk (not is_h) h_lo' h_hi' h_den' v_lo' v_hi' v_den' child
+      ) (List2.to_list children)
+  in
+  walk (is_h tiling) 0 1 1 0 1 1 (tree tiling);
+  (!h_cuts, !v_cuts)
+
+(* Rational comparison: a/b < c/d iff a*d < c*b (assuming positive denominators) *)
+let rat_lt (a, b) (c, d) = a * d < c * b
+let rat_le (a, b) (c, d) = a * d <= c * b
+
+(* Find interior intersection points of H-cuts and V-cuts.
+   Cross (+): V-cut x strictly inside H-cut x-span AND H-cut y strictly inside V-cut y-span.
+   T-junction: one strict, one at boundary. *)
+let degenerate_cuts tiling =
+  let (h_cuts, v_cuts) = collect_cuts tiling in
+  let points = ref [] in
+  List.iter (fun hc ->
+    (* hc: y = hc.pos_num/hc.pos_den, x in [hc.span_lo/hc.span_den, hc.span_hi/hc.span_den] *)
+    List.iter (fun vc ->
+      (* vc: x = vc.pos_num/vc.pos_den, y in [vc.span_lo/vc.span_den, vc.span_hi/vc.span_den] *)
+      let x_in_h_lo = rat_le (hc.span_lo, hc.span_den) (vc.pos_num, vc.pos_den) in
+      let x_in_h_hi = rat_le (vc.pos_num, vc.pos_den) (hc.span_hi, hc.span_den) in
+      let x_strict_lo = rat_lt (hc.span_lo, hc.span_den) (vc.pos_num, vc.pos_den) in
+      let x_strict_hi = rat_lt (vc.pos_num, vc.pos_den) (hc.span_hi, hc.span_den) in
+      let y_in_v_lo = rat_le (vc.span_lo, vc.span_den) (hc.pos_num, hc.pos_den) in
+      let y_in_v_hi = rat_le (hc.pos_num, hc.pos_den) (vc.span_hi, vc.span_den) in
+      let y_strict_lo = rat_lt (vc.span_lo, vc.span_den) (hc.pos_num, hc.pos_den) in
+      let y_strict_hi = rat_lt (hc.pos_num, hc.pos_den) (vc.span_hi, vc.span_den) in
+      let x_inside = x_in_h_lo && x_in_h_hi in
+      let y_inside = y_in_v_lo && y_in_v_hi in
+      let x_strict = x_strict_lo && x_strict_hi in
+      let y_strict = y_strict_lo && y_strict_hi in
+      (* At least one containment must be strict (otherwise it's a regular corner) *)
+      if x_inside && y_inside && (x_strict || y_strict) then
+        let pt = { px = vc.pos_num; pd = vc.pos_den;
+                   qx = hc.pos_num; qd = hc.pos_den } in
+        points := pt :: !points
+    ) v_cuts
+  ) h_cuts;
+  List.sort_uniq compare_rpoint !points
+
 (* --- LCA-based adjacency --- *)
 
 type adjacency = North | South | East | West
