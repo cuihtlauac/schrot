@@ -601,7 +601,7 @@ let degenerate_cuts tiling =
 
 (* Depth of the lowest common ancestor of two tiles in the tree.
    This is the length of the common path prefix from root to each tile. *)
-let lca_depth a b tiling =
+let cut_depth a b tiling =
   let find_path n =
     let rec go is_h = function
       | Schrot.Tile k -> if k = n then Some [] else None

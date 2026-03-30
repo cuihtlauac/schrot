@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 type rule =
   | Split_h of int
   | Split_v of int

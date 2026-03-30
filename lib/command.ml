@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 type dir = Path.dir = Left | Right | Up | Down
 
 type t =

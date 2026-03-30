@@ -32,7 +32,7 @@ let () =
       incr total_tilings;
       let t = label_tiling unit_tiling in
       let tab = edge_set (Tiling.tabstop_all_adjacencies t) in
-      let geom = edge_set (Geom.edge_pairs (Geom.of_tiling t)) in
+      let geom = edge_set (Geom.edges (Geom.of_tiling t)) in
       (* Check geom ⊆ tab *)
       let geom_not_tab = List.filter (fun e -> not (List.mem e tab)) geom in
       if geom_not_tab <> [] then begin

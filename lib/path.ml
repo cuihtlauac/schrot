@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 type dir = Left | Right | Up | Down
 
 type side = L | R

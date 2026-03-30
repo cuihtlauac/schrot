@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 type tab = int
 
 type bounds = {

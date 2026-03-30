@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 open Nachum
 
 (* Generate all binary tree shapes (Catalan recurrence) with k leaves.

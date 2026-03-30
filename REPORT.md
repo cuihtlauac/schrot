@@ -7,8 +7,8 @@ Guillotine partitions of a rectangle (recursive axis-aligned subdivisions) are n
 We provide:
 1. An explicit D4 action on Schroder trees (the combinatorial representation of guillotine partitions).
 2. A canonical form for D4 orbits, enabling efficient enumeration of one representative per equivalence class.
-3. Two independent adjacency algorithms (LCA-interval and tabstop) verified to agree exhaustively.
-4. Evidence that the D4 orbit is the tightest natural equivalence preserving the tiling's geometric structure — coarser equivalences (unordered tree shape, planar tree shape) fail to preserve adjacency.
+3. Two adjacency notions: tabstop (potential, maximal) and geometric (authoritative for a given layout), verified to satisfy geometric ⊆ tabstop.
+4. Evidence that the D4 orbit is the tightest natural equivalence preserving the tiling's geometric structure — coarser equivalences (unordered tree shape, planar tree shape) fail to preserve the tabstop adjacency graph.
 
 ### D4 orbit counts
 
@@ -65,51 +65,58 @@ where |Fix(g)| counts tilings fixed by symmetry g. For n >= 2:
 - Horizontal and vertical reflections: tilings symmetric under selective child reversal
 - Diagonal reflections: 0 (these also swap H/V at root)
 
-## Adjacency computation
+## Adjacency
 
-Two tiles in a guillotine partition are adjacent if they share a boundary segment (not just a corner point). We implemented two independent methods:
+### Adjacency depends on split ratios
 
-### LCA + rational interval method
+Guillotine partitions with cross junctions (where 4 tiles meet at a point under equal splits) are not one-sided in the sense of Eppstein et al. [2]. This means their adjacency graph depends on the split ratios: tiles that touch at a point under one set of ratios can share a boundary segment under another. The tree structure alone does not determine adjacency — the split positions do.
 
-Two tiles a and b are adjacent iff:
-1. Their lowest common ancestor (LCA) is a frame where a and b descend from **consecutive** children (indices i and i+1).
-2. Both tiles **touch the cut boundary** between these children. This is verified by checking that at every same-orientation ancestor between the LCA and the tile, the tile is on the boundary side (first child for one side, last child for the other).
-3. Their **perpendicular intervals overlap**. The interval of a tile on an axis is computed as an exact rational by walking root-to-tile: at each frame of matching orientation with arity k, `num = num * k + index, den = den * k`.
+Point contact (four tiles meeting at a single point) is excluded from adjacency, following the standard definition [2]: "mere point contact does not constitute adjacency."
 
-### Tabstop method
+### Tabstop adjacency (potential, maximal)
 
-Each internal node with k children introduces k-1 symbolic boundary identifiers (tabstops). An H-frame introduces y-tabstops; a V-frame introduces x-tabstops. Two tiles are adjacent if they share a tabstop on opposing boundaries and their perpendicular intervals overlap.
+Each internal node with k children introduces k-1 symbolic boundary identifiers (tabstops). An H-frame introduces y-tabstops; a V-frame introduces x-tabstops. Two tiles are potentially adjacent if they share a tabstop on opposing boundaries. This is the maximal set — every pair that is adjacent in some concrete layout of the tiling. It includes both diagonals at cross junctions.
 
-### Agreement
+The tabstop adjacency graph is D4-invariant (verified exhaustively up to n=6 by `topology_check`).
 
-Both methods were verified to agree exhaustively for all tilings with up to 7 tiles (2321 tilings, 44888 pair-checks, 0 disagreements).
+### Geometric adjacency (authoritative for rendered layout)
+
+Tile rectangles are computed from resolved splits (`resolve_splits`), which eliminates cross junctions by spreading coincident cuts at each parent boundary into evenly spaced positions. Two tiles are adjacent if they share a boundary segment of positive length in the resolved geometry.
+
+The geometric adjacency is a strict subset of the tabstop adjacency. The difference is exactly the unchosen diagonals at cross junctions — at each cross junction, one diagonal is chosen by a D4-covariant structural bias (sorting by subtree height).
+
+### Agreement verification
+
+Both adjacency notions were verified exhaustively for all tilings with up to 6 tiles (515 tilings): geometric ⊆ tabstop, with 230 extra tabstop edges (unchosen diagonals at cross junctions).
 
 ## D4 is the tightest natural equivalence
 
-We tested whether coarser equivalences (grouping more tilings together) still preserve the adjacency graph. They do not:
+We tested whether coarser equivalences (grouping more tilings together) still preserve the tabstop adjacency graph. They do not:
 
 - **Unordered tree shape** (children freely permutable at each node): Fails at n=4. A 3-ary frame with a binary sub-frame at the end vs. the middle produces different adjacency graphs (the middle position creates additional contacts with both neighboring strips).
 
-- **Planar tree shape** (children reversible at each node independently): Fails at n=5. Binary chains of depth 4 with different internal chirality produce different adjacency graphs (7 edges vs. 8 edges), because reversing children at an inner node changes which tiles contact across ancestor frame boundaries.
+- **Planar tree shape** (children reversible at each node independently): Fails at n=5. Binary chains of depth 4 with different internal chirality produce different adjacency graphs, because reversing children at an inner node changes which tiles share tabstops across ancestor frame boundaries.
 
 In both cases, the coarser equivalence merges tilings that a human viewer immediately sees as different. D4, which only allows **global** symmetries of the square (not local child reorderings), is the natural boundary.
 
-Note: the unlabeled adjacency graph is a D4 invariant (the forward direction is trivially true since D4 acts by isometries), but it is **not** a complete invariant — distinct D4 orbits can have isomorphic abstract adjacency graphs (first observed at n=4).
+Note: the unlabeled tabstop adjacency graph is a D4 invariant (the forward direction is trivially true since D4 acts by isometries of the tree), but it is **not** a complete invariant — distinct D4 orbits can have isomorphic abstract adjacency graphs (first observed at n=4).
 
 ## Implementation
 
-All code is in OCaml, available at https://github.com/cuihtlauac/shrod.
+All code is in OCaml.
 
 Core library (`lib/`):
 - `schrot.ml` — Schroder tree type (`Tile | Frame of t List2.t`), fold/unfold/map, enumeration
 - `list2.ml` — Lists with >= 2 elements (`Cons2 of 'a * 'a * 'a list`)
-- `tiling.ml` — Tiling operations: split, close, neighbor navigation, adjacency (LCA and tabstop methods), D4 action (rot90, rot180, flip_h, d4_orbit), canonical forms (canonical_d4, canonical_planar, canonical_unordered), rational intervals, graph isomorphism
+- `tiling.ml` — Tiling operations: split, close, neighbor navigation, tabstop adjacency (`tabstop_all_adjacencies`), junction resolution (`resolve_splits`), `cut_depth`, D4 action (rot90, rot180, flip_h, d4_orbit), canonical forms, degenerate vertex detection, graph isomorphism
+- `geom.ml` — Tile rectangle geometry (from resolved splits), geometric adjacency (shared boundary segment, excluding point contact)
 - `svg.ml` — SVG rendering with spectral cut-line coloring
 
 Verification tools (`bin/`):
-- `adjacency_check.ml` — Exhaustive verification that LCA and tabstop methods agree
-- `topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs
+- `adjacency_check.ml` — Verifies geometric adjacency ⊆ tabstop potential adjacency
+- `topology_check.ml` — Verification that D4 orbits have isomorphic tabstop adjacency graphs
 - `conjecture_check.ml` — Efficient single-pass verification via fingerprinting
+- `cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree
 - `tiling_test.ml` — Enumeration visualization grouped by D4 orbit
 
 Interactive (`bin/`):

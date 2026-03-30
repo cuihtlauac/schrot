@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 module type S = sig
   val name : string
   val compile : Command.t -> Term.t -> Rewrite.rule list

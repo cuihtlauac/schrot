@@ -22,29 +22,31 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
-- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation). Junction resolution via iterative repulsion (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
-- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `edge_pairs`, `neighbors`, `fingerprint`, `graphs_isomorphic`.
-- `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors, iterative repulsion for junction resolution). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t). Legacy `render_group`/`render` for binary Term.t.
+- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation). Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
+- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`.
+- `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t, edges colored by `cut_depth`). Legacy `render_group`/`render`/`render_interactive` for binary Term.t (marked TODO).
 - `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_shrot_N.svg` (one representative per D4 orbit with tree + adjacency graph), `svg/operations.svg`. Supports `--max-svg N` to skip SVG for large N.
 - `bin/adjacency_check.ml` — Verifies geometric adjacency ⊆ tabstop potential adjacency.
 - `bin/topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs.
 - `bin/conjecture_check.ml` — Efficient single-pass verification via fingerprinting.
 - `bin/cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree.
 
-### Binary tree layer (legacy, to be migrated)
+### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
-- `lib/term.ml` — `Term.t = Leaf of int | H of t * t | V of t * t`. H splits top/bottom, V splits left/right. Left child = top (H) or left (V).
-- `lib/rewrite.ml` — Low-level rules: `Split_h`, `Split_v`, `Close_h_l`, `Close_h_r`, `Close_v_l`, `Close_v_r`, `Swap`, `Promote`, `Demote`, `Rotate`, `Transpose`, `Slide`, `Exchange`. `apply rule term` transforms a tree.
-- `lib/command.ml` — High-level spatial commands (`Move(n, dir)`, `Split(n, dir)`, `Close(n)`). `compile cmd term` produces a `Rewrite.rule list` by scanning the path from leaf to root for the first aligned+favorable ancestor.
-- `lib/path.ml` — Path from root to leaf as list of steps. Dyadic rational metrics: `center_coord`, `interval`, `perp_overlap`, `aspect_sig`, `aspect_distortion`.
-- `lib/tabstop.ml` — Symbolic boundary extraction and neighbor finding (replaces deleted geometry.ml).
-- `lib/policy.ml` — First-class policy modules (`module type S` with `name`, `compile`, `predicate`). Three policies: `positional`, `dominance`, `territorial`.
+This layer is functional but frozen. It operates on binary `Term.t` trees with fixed H/V splits. The next major milestone is migrating these operations to native Schroder tree operations (`split`, `close`, `neighbor` in `tiling.ml`).
+
+- `lib/term.ml` — `Term.t = Leaf of int | H of t * t | V of t * t`. H splits top/bottom, V splits left/right.
+- `lib/rewrite.ml` — Low-level rules: `Split_h`, `Split_v`, `Close_*`, `Swap`, `Promote`, `Demote`, `Rotate`, `Transpose`, `Slide`, `Exchange`. `apply rule term` transforms a tree.
+- `lib/command.ml` — High-level spatial commands (`Move(n, dir)`, `Split(n, dir)`, `Close(n)`). `compile cmd term` produces a `Rewrite.rule list`.
+- `lib/path.ml` — Path from root to leaf as list of steps. Dyadic rational metrics: `perp_overlap`, `aspect_distortion`, `center_moved`, `perp_depth`, `touches_wall`, `extent_increased`.
+- `lib/tabstop.ml` — Symbolic boundary extraction and neighbor finding for binary terms.
+- `lib/policy.ml` — First-class policy modules (`positional`, `dominance`, `territorial`).
 - `lib/parser.ml` — Parses rule names from strings (stdin protocol).
 - `bin/main.ml` — Interactive CLI: reads rules from stdin, updates SVG.
-- `bin/test_svg.ml` — Visual test suite generator. One file per policy per category (open_close, move).
+- `bin/test_svg.ml` — Visual test suite generator. One file per policy per category.
 - `bin/model_check.ml` — Exhaustive checker: enumerates all trees up to k leaves, checks every command against policy predicates.
 - `bin/reachability.ml` — SCC analysis of the state graph under move operations.
-- `bin/web.ml` — Browser prototype (Dream server). Click tiles, arrow keys to move, Alt+Arrow to split, Del to close, Ctrl+Z to undo.
+- `bin/web.ml` — Browser prototype (Dream server). Uses Schroder tilings for rendering but legacy Command/Rewrite for operations.
 
 ## Schroder tree model
 
@@ -81,11 +83,17 @@ Two notions of adjacency, both derived from the Schroder tree:
 - **Tabstop (potential)**: `tabstop_all_adjacencies` returns all tile pairs sharing a tabstop on opposing sides. This is the maximal set — every pair that is adjacent in *some* concrete layout. Includes both diagonals at cross junctions.
 - **Geometric (authoritative)**: `Geom.of_tiling` computes tile rectangles via `resolve_splits` (iterative repulsion), then finds pairs sharing a boundary of positive length. Excludes point contact. This is the adjacency of the rendered layout.
 
-Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the NW-SE diagonal is deterministically chosen.
+Adjacency topology depends on split ratios. Guillotine partitions with cross junctions are not one-sided (Eppstein et al. 2009), so their adjacency graph changes with the geometry: tiles that touch at a point under one set of ratios can share a boundary segment under another. This means the tree structure alone does not determine adjacency — the split positions do.
+
+Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the diagonal is chosen deterministically by structural bias (D4-covariant).
 
 ### Junction resolution
 
-`resolve_splits` eliminates 3-multiplicity junctions (where 3+ tiles meet at a point) by spreading cuts that terminate at each parent boundary into evenly spaced positions. Deterministic NW-SE bias: cuts from the "before" child get smaller target slots, cuts from the "after" child get larger slots. Relaxation: `pos += 0.3 * (target - pos)` for 40 iterations.
+`resolve_splits` eliminates cross junctions (4-multiplicity points under equal splits) by spreading coincident cuts at each parent boundary into evenly spaced positions. Only boundaries with actual coincidences (same position, different frames) are affected; tilings without crosses keep exact equal splits.
+
+D4-covariant structural bias: cuts are sorted by `(before_height - after_height)` — each cut moves toward its shallower side, giving the deeper subtree more room. This is invariant under D4 symmetry because subtree height is a tree property.
+
+Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement < 1e-6 (typically ~31 iterations).
 
 ### References
 

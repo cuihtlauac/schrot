@@ -39,7 +39,7 @@ let () =
       in
       if canon = self_erased then begin
         incr n_orbits;
-        let edges = Geom.edge_pairs (Geom.of_tiling labeled) in
+        let edges = Geom.edges (Geom.of_tiling labeled) in
         let fp = Tiling.adjacency_fingerprint n edges in
         let prev = try Hashtbl.find tbl fp with Not_found -> [] in
         Hashtbl.replace tbl fp ((self_str, edges) :: prev)

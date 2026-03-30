@@ -9,6 +9,7 @@ let default_color_of n = colors.(n mod Array.length colors)
 
 let default_text_color_of _n = "black"
 
+(* TODO: Bring up to Schroder tilings *)
 let render_group ~x ~y ~width ~height ~margin
     ?(color_of = default_color_of) ?(text_color_of = default_text_color_of) term =
   let buf = Buffer.create 4096 in
@@ -36,6 +37,7 @@ let render_group ~x ~y ~width ~height ~margin
     (width -. 2. *. margin) (height -. 2. *. margin) term;
   Buffer.contents buf
 
+(* TODO: Bring up to Schroder tilings *)
 let render_interactive ~x ~y ~width ~height ~margin
     ?(color_of = default_color_of) ?(text_color_of = default_text_color_of) term =
   let buf = Buffer.create 4096 in
@@ -65,6 +67,7 @@ let render_interactive ~x ~y ~width ~height ~margin
     (width -. 2. *. margin) (height -. 2. *. margin) term;
   Buffer.contents buf
 
+(* TODO: Bring up to Schroder tilings *)
 let render ~width ~height term =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in
@@ -256,8 +259,9 @@ let render_adjacency_graph ~x ~y ~width ~height (g : Geom.t) =
     let (cx, cy) = Geom.center_of g n in
     (x +. mg +. cx *. usable_w, y +. mg +. cy *. usable_h)
   in
-  List.iter (fun (a, b, depth) ->
+  List.iter (fun (a, b) ->
     let (ax, ay) = pos a and (bx, by) = pos b in
+    let depth = Tiling.cut_depth a b g.tiling in
     let color = cut_color ~depth ~max_depth in
     addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
           stroke=\"%s\" stroke-width=\"2.5\"/>\n"

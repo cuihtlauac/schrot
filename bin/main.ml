@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 let () =
   let width = ref 800. in
   let height = ref 600. in

@@ -246,7 +246,7 @@ let d4_page n output_dir =
   (* Sort by graph fingerprint so isomorphic adjacency graphs appear side by side *)
   let with_fp = List.map (fun t ->
     let g = Geom.of_tiling t in
-    let edges = Geom.edge_pairs g in
+    let edges = Geom.edges g in
     let fp = Tiling.adjacency_fingerprint n edges in
     (t, fp)
   ) representatives in

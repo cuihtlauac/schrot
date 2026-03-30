@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 let parse_rule line =
   let line = String.trim line in
   let parse_int s =

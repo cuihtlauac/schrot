@@ -1,3 +1,4 @@
+(* TODO: Bring up to Schroder tilings *)
 open Nachum
 
 (* --- Tree enumeration (shared with model_check.ml) --- *)
