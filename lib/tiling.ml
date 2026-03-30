@@ -279,7 +279,7 @@ let find_boundary_groups cuts eps =
     in
     check terms
   in
-  (* V-cuts terminating at each H-cut *)
+  (* V-cuts terminating at each H-cut (parent_is_h = true) *)
   List.iter (fun hc ->
     let terms = List.filter (fun vc ->
       (abs_float (vc.span_lo -. hc.abs_pos) < eps ||
@@ -288,9 +288,9 @@ let find_boundary_groups cuts eps =
       vc.abs_pos < hc.span_hi -. eps
     ) v_cuts in
     if List.length terms >= 2 && has_coincidence terms then
-      groups := (hc.span_lo, hc.span_hi, terms) :: !groups
+      groups := (true, hc.span_lo, hc.span_hi, terms) :: !groups
   ) h_cuts;
-  (* H-cuts terminating at each V-cut *)
+  (* H-cuts terminating at each V-cut (parent_is_h = false) *)
   List.iter (fun vc ->
     let terms = List.filter (fun hc ->
       (abs_float (hc.span_lo -. vc.abs_pos) < eps ||
@@ -299,17 +299,17 @@ let find_boundary_groups cuts eps =
       hc.abs_pos < vc.span_hi -. eps
     ) h_cuts in
     if List.length terms >= 2 && has_coincidence terms then
-      groups := (vc.span_lo, vc.span_hi, terms) :: !groups
+      groups := (false, vc.span_lo, vc.span_hi, terms) :: !groups
   ) v_cuts;
   !groups
 
 (* Resolve junctions by iterative relaxation toward evenly spaced targets.
 
-   Deterministic NW-SE diagonal bias: at each boundary group, cuts from
-   the "before" child (whose span ends at the boundary) get smaller target
-   slots, cuts from the "after" child (whose span starts at the boundary)
-   get larger slots.  This always picks the top-left to bottom-right
-   diagonal at cross junctions.
+   D4-covariant diagonal bias: at H-boundaries (where V-cuts terminate),
+   "before" children (above) get smaller target slots → NW-SE diagonal.
+   At V-boundaries (where H-cuts terminate), the sort is reversed so the
+   bias rotates with the tiling under D4 symmetry.  This ensures
+   D4-equivalent tilings produce D4-equivalent rendered layouts.
 
    References:
    - Eppstein et al. 2009, "Area-Universal Rectangular Layouts": adjacency
@@ -336,27 +336,36 @@ let resolve_splits ?(max_iter = 40) tiling =
       Hashtbl.replace all_targets key (target :: prev)
     in
     let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
-    List.iter (fun (span_lo, span_hi, group) ->
+    List.iter (fun (parent_is_h, span_lo, span_hi, group) ->
       let n = List.length group in
       (* Find the boundary position: it's the span endpoint shared by the
          terminating cuts (span_hi for before-children, span_lo for after) *)
       let boundary = match group with
         | c :: _ ->
-          (* The boundary cut's abs_pos is c's span_lo or span_hi *)
           let mid = (c.span_lo +. c.span_hi) /. 2. in
           if mid < (span_lo +. span_hi) /. 2. then c.span_hi else c.span_lo
         | [] -> 0.
       in
-      (* Sort: before-children first (span_hi ≈ boundary, smaller slots),
-         then after-children (span_lo ≈ boundary, larger slots).
-         Within each group, sort by abs_pos (ascending). *)
+      (* D4-covariant sort:
+         - H-boundary: before-first (NW-SE diagonal)
+         - V-boundary: after-first (rotated NW-SE = same visual pattern
+           under 90° rotation) *)
       let eps = 1e-9 in
       let is_before c = abs_float (c.span_hi -. boundary) < eps in
       let sorted = List.sort (fun a b ->
         let ba = is_before a and bb = is_before b in
-        if ba && not bb then -1
-        else if not ba && bb then 1
-        else compare a.abs_pos b.abs_pos
+        let order = if parent_is_h then
+          (* H-boundary: before < after *)
+          if ba && not bb then -1
+          else if not ba && bb then 1
+          else 0
+        else
+          (* V-boundary: after < before (reversed) *)
+          if ba && not bb then 1
+          else if not ba && bb then -1
+          else 0
+        in
+        if order <> 0 then order else compare a.abs_pos b.abs_pos
       ) group in
       (* Assign evenly spaced targets *)
       List.iteri (fun i c ->
