@@ -309,7 +309,14 @@ let resolve_splits ?(max_iter = 40) tiling =
   let st = init_splits (tree tiling) in
   let is_h_root = is_h tiling in
   let (_, cuts_eq) = collect_geometry is_h_root st in
-  let groups = find_boundary_groups cuts_eq 1e-9 in
+  (* Only keep boundary groups where cuts come from 2+ different frames.
+     Same-frame groups (e.g., h(0, v(1,2,3))) have no cross junction
+     and their equal-split positions are already correct. *)
+  let groups = List.filter (fun (_, _, terms) ->
+    match terms with
+    | [] | [_] -> false
+    | first :: rest -> List.exists (fun c -> c.frame_id <> first.frame_id) rest
+  ) (find_boundary_groups cuts_eq 1e-9) in
   if groups = [] then st
   else begin
     (* For each boundary group, determine the boundary position and sort
