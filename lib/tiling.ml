@@ -205,6 +205,11 @@ let init_splits tree =
    can adjust it in place. *)
 type rect = { rx: float; ry: float; rw: float; rh: float }
 
+let rec split_tree_height = function
+  | SLeaf _ -> 0
+  | SFrame { children; _ } ->
+    1 + List2.fold_left (fun acc c -> max acc (split_tree_height c)) 0 children
+
 type cut_seg = {
   cut_is_h: bool;      (* true = horizontal cut at constant y *)
   abs_pos: float;       (* position on the cut's own axis *)
@@ -215,6 +220,8 @@ type cut_seg = {
   frame_span: float;    (* owning frame's span on the cut's axis *)
   frame_origin: float;  (* absolute position of frame's start on the cut's axis *)
   frame_id: int;        (* unique id for the owning frame, stable across mutations *)
+  before_height: int;   (* height of child subtree before this cut (child cut_idx-1) *)
+  after_height: int;    (* height of child subtree after this cut (child cut_idx) *)
 }
 
 let collect_geometry is_h_root st =
@@ -228,21 +235,26 @@ let collect_geometry is_h_root st =
     | SFrame { pos; children } ->
       let k = List2.length children in
       let fid = fresh_id () in
+      let ch_arr = Array.of_list (List2.to_list children) in
       for i = 1 to k - 1 do
+        let bh = split_tree_height ch_arr.(i - 1) in
+        let ah = split_tree_height ch_arr.(i) in
         if is_h then
           let cy = y +. pos.(i) *. h in
           cuts := { cut_is_h = true; abs_pos = cy;
                     span_lo = x; span_hi = x +. w;
                     owner = pos; cut_idx = i;
                     frame_span = h; frame_origin = y;
-                    frame_id = fid } :: !cuts
+                    frame_id = fid;
+                    before_height = bh; after_height = ah } :: !cuts
         else
           let cx = x +. pos.(i) *. w in
           cuts := { cut_is_h = false; abs_pos = cx;
                     span_lo = y; span_hi = y +. h;
                     owner = pos; cut_idx = i;
                     frame_span = w; frame_origin = x;
-                    frame_id = fid } :: !cuts
+                    frame_id = fid;
+                    before_height = bh; after_height = ah } :: !cuts
       done;
       List2.iteri (fun i child ->
         if is_h then
@@ -279,7 +291,7 @@ let find_boundary_groups cuts eps =
     in
     check terms
   in
-  (* V-cuts terminating at each H-cut (parent_is_h = true) *)
+  (* V-cuts terminating at each H-cut *)
   List.iter (fun hc ->
     let terms = List.filter (fun vc ->
       (abs_float (vc.span_lo -. hc.abs_pos) < eps ||
@@ -288,9 +300,9 @@ let find_boundary_groups cuts eps =
       vc.abs_pos < hc.span_hi -. eps
     ) v_cuts in
     if List.length terms >= 2 && has_coincidence terms then
-      groups := (true, hc.span_lo, hc.span_hi, terms) :: !groups
+      groups := (hc.span_lo, hc.span_hi, terms) :: !groups
   ) h_cuts;
-  (* H-cuts terminating at each V-cut (parent_is_h = false) *)
+  (* H-cuts terminating at each V-cut *)
   List.iter (fun vc ->
     let terms = List.filter (fun hc ->
       (abs_float (hc.span_lo -. vc.abs_pos) < eps ||
@@ -299,17 +311,16 @@ let find_boundary_groups cuts eps =
       hc.abs_pos < vc.span_hi -. eps
     ) h_cuts in
     if List.length terms >= 2 && has_coincidence terms then
-      groups := (false, vc.span_lo, vc.span_hi, terms) :: !groups
+      groups := (vc.span_lo, vc.span_hi, terms) :: !groups
   ) v_cuts;
   !groups
 
 (* Resolve junctions by iterative relaxation toward evenly spaced targets.
 
-   D4-covariant diagonal bias: at H-boundaries (where V-cuts terminate),
-   "before" children (above) get smaller target slots → NW-SE diagonal.
-   At V-boundaries (where H-cuts terminate), the sort is reversed so the
-   bias rotates with the tiling under D4 symmetry.  This ensures
-   D4-equivalent tilings produce D4-equivalent rendered layouts.
+   D4-covariant structural bias: at each boundary group, cuts from
+   shallower subtrees get smaller target slots, giving deeper subtrees
+   more room.  This is D4-covariant because subtree height is a tree
+   property, invariant under geometric transformations.
 
    References:
    - Eppstein et al. 2009, "Area-Universal Rectangular Layouts": adjacency
@@ -336,36 +347,17 @@ let resolve_splits ?(max_iter = 40) tiling =
       Hashtbl.replace all_targets key (target :: prev)
     in
     let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
-    List.iter (fun (parent_is_h, span_lo, span_hi, group) ->
+    List.iter (fun (span_lo, span_hi, group) ->
       let n = List.length group in
-      (* Find the boundary position: it's the span endpoint shared by the
-         terminating cuts (span_hi for before-children, span_lo for after) *)
-      let boundary = match group with
-        | c :: _ ->
-          let mid = (c.span_lo +. c.span_hi) /. 2. in
-          if mid < (span_lo +. span_hi) /. 2. then c.span_hi else c.span_lo
-        | [] -> 0.
-      in
-      (* D4-covariant sort:
-         - H-boundary: before-first (NW-SE diagonal)
-         - V-boundary: after-first (rotated NW-SE = same visual pattern
-           under 90° rotation) *)
-      let eps = 1e-9 in
-      let is_before c = abs_float (c.span_hi -. boundary) < eps in
+      (* D4-covariant structural sort: each cut moves toward its shallower
+         side, giving the deeper side more room.  Sort by
+         (before_height - after_height): negative = before is shallower,
+         cut gets a smaller slot; positive = after is shallower, larger slot. *)
       let sorted = List.sort (fun a b ->
-        let ba = is_before a and bb = is_before b in
-        let order = if parent_is_h then
-          (* H-boundary: before < after *)
-          if ba && not bb then -1
-          else if not ba && bb then 1
-          else 0
-        else
-          (* V-boundary: after < before (reversed) *)
-          if ba && not bb then 1
-          else if not ba && bb then -1
-          else 0
-        in
-        if order <> 0 then order else compare a.abs_pos b.abs_pos
+        let da = a.before_height - a.after_height in
+        let db = b.before_height - b.after_height in
+        let c = compare da db in
+        if c <> 0 then c else compare a.abs_pos b.abs_pos
       ) group in
       (* Assign evenly spaced targets *)
       List.iteri (fun i c ->
