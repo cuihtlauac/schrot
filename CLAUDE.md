@@ -22,9 +22,14 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
-- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split n dir t` inserts into parent frame (same orientation) or wraps in sub-frame (cross orientation). `close n t` removes tile, collapses frames, flips root orientation on root collapse. Also: `to_string`, `size`, `leaves`, `relabel`.
-- `lib/svg.ml` — SVG rendering. `render_tiling_group` / `render_tiling` for Schroder tilings (divides space equally among List2 children, alternating H/V with depth). Legacy `render_group` / `render` for binary Term.t.
-- `bin/tiling_test.ml` — Generates `svg/enum_N.svg` (all tilings with N leaves) and `svg/operations.svg` (split/close examples).
+- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation), `tile_interval` (exact rational), `tile_interval_perturbed` (float with split perturbation), adjacency via LCA and tabstop methods, D4/V4 symmetry actions and canonical forms, `adjacency_graph`, `graphs_isomorphic`, `adjacency_fingerprint`.
+- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles and adjacency edges computed from perturbed splits. `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`, `fingerprint`, `graphs_isomorphic`.
+- `lib/svg.ml` — SVG rendering. `render_tiling_grid` (Wikipedia-style grid with spectral cut colors, bias for sibling frames, nudge for remaining crosses). `render_tiling_group` (perturbed filled rectangles for web UI). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t). Legacy `render_group`/`render` for binary Term.t.
+- `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_shrot_N.svg` (one representative per D4 orbit with tree + adjacency graph), `svg/operations.svg`. Supports `--max-svg N` to skip SVG for large N.
+- `bin/adjacency_check.ml` — Exhaustive verification that LCA and tabstop adjacency methods agree.
+- `bin/topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs.
+- `bin/conjecture_check.ml` — Efficient single-pass verification via fingerprinting.
+- `bin/geom_vs_lca_check.ml` — 3-way comparison: LCA vs tabstop vs geometric adjacency.
 
 ### Binary tree layer (legacy, to be migrated)
 
