@@ -379,7 +379,7 @@ let resolve_splits ?(max_iter = 40) tiling =
       let avg = List.fold_left ( +. ) 0. targets /. float_of_int n in
       Hashtbl.replace final_targets key avg
     ) all_targets;
-    (* Apply a small fixed offset toward each target to seed relaxation *)
+    (* Apply a small fixed offset toward each target to seed the direction *)
     Hashtbl.iter (fun key target ->
       match Hashtbl.find_opt owner_of key with
       | Some (owner, idx) ->
@@ -387,13 +387,21 @@ let resolve_splits ?(max_iter = 40) tiling =
         owner.(idx) <- owner.(idx) +. offset
       | None -> ()
     ) final_targets;
-    (* Iterate relaxation *)
+    (* Relax toward targets.  Each step: pos += alpha * (target - pos).
+       Converges geometrically; stop when max displacement < eps. *)
     let alpha = 0.3 in
-    for _ = 1 to max_iter do
+    let eps = 1e-6 in
+    let converged = ref false in
+    let iter = ref 0 in
+    while not !converged && !iter < max_iter do
+      incr iter;
+      let max_disp = ref 0. in
       Hashtbl.iter (fun key target ->
         match Hashtbl.find_opt owner_of key with
         | Some (owner, idx) ->
-          owner.(idx) <- owner.(idx) +. alpha *. (target -. owner.(idx))
+          let disp = alpha *. (target -. owner.(idx)) in
+          owner.(idx) <- owner.(idx) +. disp;
+          max_disp := max !max_disp (abs_float disp)
         | None -> ()
       ) final_targets;
       (* Clamp monotonicity *)
@@ -409,7 +417,8 @@ let resolve_splits ?(max_iter = 40) tiling =
               (min (owner.(i + 1) -. tiny) owner.(i))
           done
         end
-      ) owner_of
+      ) owner_of;
+      if !max_disp < eps then converged := true
     done;
     st
   end
