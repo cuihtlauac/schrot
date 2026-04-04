@@ -115,7 +115,65 @@
 
    The tiebreaker correctness (that the two topological sorts produce
    a valid realizer for all guillotine tilings) is verified
-   exhaustively but not yet proven.
+   exhaustively but not yet proven.  A proof sketch follows.
+
+
+   TIEBREAKER CORRECTNESS (proof obligation for the Rocq track)
+
+   Claim: for any guillotine rectangulation with any split positions,
+   the intersection of the two topological sorts equals P_a.
+
+   It suffices to show that for every incomparable pair {a, b} in P_a,
+   order1 and order2 disagree on their relative position.
+
+   Step 1: incomparable pairs arise only at cross junctions.
+
+   In a guillotine tiling, every cut is wall-to-wall within its
+   sub-rectangle.  For any two tiles a, b, their lowest common
+   ancestor (LCA) in the Schroder tree is a Frame whose orientation
+   determines whether a is left-of or above b.  This gives a total
+   order that refines P_a.  Two tiles can only be incomparable in P_a
+   if the LCA-based ordering is not witnessed by any adjacency chain.
+   This happens exactly when they are diagonally opposite at a cross
+   junction where all four tiles meet at a point (no shared boundary).
+
+   Step 2: at each cross junction, exactly one diagonal is incomparable.
+
+   Label the four tiles at a cross junction:
+
+       NW | NE          edges: NW-NE, SW-SE, NW-SW, NE-SE
+       ---+---          chains: SW < NW < NE  and  SW < SE < NE
+       SW | SE          incomparable: {NW, SE}   (the NW-SE diagonal)
+                        comparable:   {SW, NE}   (via SW < NW < NE)
+
+   The SW-NE diagonal is always transitively connected (through both
+   L-shaped paths).  Only the NW-SE diagonal can be incomparable, and
+   it is incomparable iff those two tiles do not share a boundary
+   segment (the cross junction is unresolved).
+
+   Step 3: the tiebreakers disagree on every NW-SE diagonal.
+
+   The NW tile has strictly smaller x-center (it is to the left) and
+   strictly smaller y-center (it is higher up, smaller y in screen
+   coordinates).  Therefore:
+   - order1 (smallest x-center first) emits NW before SE.
+   - order2 (largest y-center first) emits SE before NW.
+   They disagree on {NW, SE}.
+
+   Step 4: multiple cross junctions do not interfere.
+
+   Each cross junction contributes one incomparable pair {NW, SE}
+   where NW has strictly smaller x and y than SE.  The tiebreaker at
+   each junction is determined by the tiles' geometric coordinates,
+   which are independent of the topological sort's sequencing.  A
+   formal proof requires an inductive argument over the sort steps,
+   showing that the tiebreaker choice at one junction does not force
+   incorrect ordering at another.  This is the part not yet formalized.
+
+   Verified exhaustively for all tilings up to n=8 (10,879 tilings)
+   with resolved geometry.  The unresolved case (user-controlled split
+   positions with exact cross junctions) follows the same geometric
+   argument but is not covered by the current test suite.
 
 
    REFERENCES
