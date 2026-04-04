@@ -30,6 +30,8 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `bin/topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs.
 - `bin/conjecture_check.ml` — Efficient single-pass verification via fingerprinting.
 - `bin/cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree.
+- `lib/poset.ml` — Adjacency poset as a 2-dimensional lattice (Asinowski et al. 2024, Prop. 9). `Poset.t` holds two rank maps (linear extensions of P_a) whose intersection is the partial order. `of_geom`, `compare`, `is_covering`, `coverings`, `minimum`, `maximum`. Poset direction: `a < b` means a is left-of or below b.
+- `bin/poset_check.ml` — Verifies poset encoding: (A) every geometric edge is comparable, (B) every covering is a geometric edge, (C) antisymmetry, (D) extrema exist. Verified up to n=8 (10,879 tilings).
 
 ### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
@@ -87,6 +89,16 @@ Adjacency topology depends on split ratios. Guillotine partitions with cross jun
 
 Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the diagonal is chosen deterministically by structural bias (D4-covariant).
 
+### Adjacency poset
+
+`Poset.of_geom` encodes the adjacency poset P_a as a 2-dimensional lattice: two total orders (stored as `IntMap.t` rank maps) whose intersection is the partial order. Tile a < b in P_a iff a is left-of or below b (transitively through adjacency edges). The poset is computed from `Geom.t` by orienting each adjacency edge, then running two topological sorts with different tiebreakers (left-right priority vs bottom-top priority).
+
+The Schroder tree determines a total order on tiles via lowest common ancestor, but this is NOT the adjacency poset. P_a requires adjacency for its base relation, and two tiles can be tree-ordered without being adjacent or transitively connected. This happens at cross junctions: in h(v(0,1), v(2,3)) without the diagonal, tiles 0 and 3 are incomparable in P_a (the Hasse diagram is a diamond, not a chain). The two total orders diverge on such incomparable pairs.
+
+When `resolve_splits` adds a diagonal edge, the diamond collapses to a total order and both rank maps agree. Under dynamic geometry (user-driven segment sliding), the topology transitions: near-degenerate = total order, at the cross = diamond, past the cross = different total order. The two-order encoding tracks this smoothly.
+
+Covering relations of P_a are a subset of adjacency edges. When a < c < b transitively, the edge a-b is not a covering even though a and b are geometrically adjacent. `Poset.coverings` recovers the Hasse diagram; `Poset.compare` gives the full partial order.
+
 ### Junction resolution
 
 `resolve_splits` eliminates cross junctions (4-multiplicity points under equal splits) by spreading coincident cuts at each parent boundary into evenly spaced positions. Only boundaries with actual coincidences (same position, different frames) are affected; tilings without crosses keep exact equal splits.
@@ -100,6 +112,7 @@ Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement 
 - Zeidler, Weber, Gavryushkin, Lutteroth. "Tiling Algebra for Constraint-based Layout Editing." J. Logical and Algebraic Methods in Programming, 2017. — Tabstops as shared constraint variables; adjacency = shared tabstop.
 - Eppstein, Mumford, Speckmann, Verbeek. "Area-Universal and Constrained Rectangular Layouts." SIAM J. Computing, 2012. — Area-universality iff one-sided; point contact excluded from adjacency; adjacency depends on split ratios in non-one-sided layouts.
 - Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees.
+- Asinowski, Cardinal, Felsner, Fusy. "Combinatorics of rectangulations: Old and new bijections." 2024. — P_a is a planar 2-dimensional lattice (Prop. 9); strong poset, flip graph, permutation bijections, guillotine characterization via windmill avoidance.
 
 ## Move compilation (binary layer)
 
