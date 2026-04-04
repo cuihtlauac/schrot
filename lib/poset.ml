@@ -176,6 +176,52 @@
    argument but is not covered by the current test suite.
 
 
+   D4 ACTION ON THE TWO ORDERS
+
+   The dihedral group D4 (symmetry of the square) acts on the pair
+   (order1, order2) by permuting and reversing.  Write rev for
+   reversal of a total order (rank k becomes n-1-k).
+
+       D4 element     | (order1, order2) becomes
+       ───────────────┼──────────────────────────
+       identity       | (order1,      order2)
+       rot90 CW       | (order2,      rev order1)
+       rot180         | (rev order1,  rev order2)
+       rot270 CW      | (rev order2,  order1)
+       flip_h         | (order1,      rev order2)
+       flip_v         | (rev order1,  order2)
+       diag SW-NE     | (order2,      order1)
+       diag NW-SE     | (rev order2,  rev order1)
+
+   Derivation: order1 prioritizes smallest x, order2 prioritizes
+   largest y.  Under rot90 CW mapping (x,y) → (1-y, x), smallest
+   new-x = largest old-y = order2; largest new-y = largest old-x =
+   rev order1.  The other elements follow by composition.
+
+   The action is faithful: all 8 combinations of swapping and
+   independently reversing two orders are realized.  This is the
+   hyperoctahedral group B_2, which is isomorphic to D4.  No larger
+   symmetry group is possible within the two-order framework — D4
+   exhausts the automorphisms of a 2-dimensional lattice realizer.
+
+   Consequences:
+   - The poset of any D4-transformed tiling can be computed from the
+     original poset algebraically, without re-running the topological
+     sort or touching the geometry.
+   - The SW-NE diagonal reflection swaps the two orders.  This is
+     the paper's Observation 19 (permutation complement ↔ diagonal
+     reflection): the two dimensions of the lattice are symmetric.
+   - The V4 subgroup {id, rot180, flip_h, flip_v} acts on each
+     order independently (reversing or not).  The coset D4/V4 ≅ Z/2
+     is the swap of the two dimensions (diagonal reflections and
+     odd rotations).  This matches the codebase's V4 subgroup that
+     preserves cut orientations (H stays H, V stays V).
+   - The tiebreaker correctness proof should be symmetric in the two
+     orders (treating x and y symmetrically), since the diagonal
+     reflection swaps them.  A proof that treats order1 differently
+     from order2 would break a symmetry of the problem.
+
+
    REFERENCES
 
    - Asinowski, Cardinal, Felsner, Fusy. "Combinatorics of
