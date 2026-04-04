@@ -1,4 +1,3 @@
-open Nachum
 
 (* Verify the two-permutation encoding of the adjacency poset.
 

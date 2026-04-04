@@ -1,4 +1,3 @@
-open Nachum
 
 (* Verify that geometric adjacency (on resolved splits) is a subset of
    tabstop potential adjacency, and that the extra tabstop pairs are

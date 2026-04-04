@@ -1,4 +1,3 @@
-open Nachum
 
 let label_tiling (is_h, unit_tree) =
   let counter = ref 0 in

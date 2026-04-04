@@ -1,4 +1,3 @@
-open Nachum
 
 let tile_w = 200.
 let tile_h = 200.

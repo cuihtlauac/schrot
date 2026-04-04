@@ -1,7 +1,7 @@
 (executables
  (names main test_svg model_check reachability tiling_test adjacency_check topology_check conjecture_check cross_check poset_check)
- (libraries nachum))
+ (libraries schrot))
 
 (executable
  (name web)
- (libraries nachum dream))
+ (libraries schrot dream))

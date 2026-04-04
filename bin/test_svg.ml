@@ -1,5 +1,4 @@
 (* TODO: Bring up to Schroder tilings *)
-open Nachum
 
 type test_case = {
   label: string;

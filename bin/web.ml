@@ -1,4 +1,3 @@
-open Nachum
 
 type state = {
   mutable tiling : Tiling.t;
@@ -172,7 +171,7 @@ let html_page = {|<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Nachum — Schroder Tilings</title>
+<title>Schrot — Schroder Tilings</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: flex;

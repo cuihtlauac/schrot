@@ -1,4 +1,4 @@
-# Nachum
+# Schrot
 
 A tiling window manager algebra in OCaml. Schroder trees represent tiling topologies (1-to-1 correspondence). Low-level rewrite rules transform trees; a high-level command compiler translates spatial intent (move, split, close) into rule sequences. The project is heading toward formally verified configurable policies (visual → model checking → Rocq).
 
