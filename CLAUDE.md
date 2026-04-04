@@ -167,3 +167,20 @@ The Schroder tree connection: large Schroder numbers count rectangular tilings. 
 - Model checking with Schroder enumeration (fewer topologies than binary)
 - Split-ratio/aspect annotations per frame
 - Three-level verification: visual SVG → model checking → Rocq proof
+- D4 orbit reduction of the paper's counting sequences (see below)
+- Dynamic geometry: user-controlled segment sliding, poset topology tracking
+
+### D4 reduction of counting sequences
+
+D4 orbit reduction applied to Schroder tilings (weak guillotine rectangulations) produces the sequence 1, 1, 2, 6, 18, 68, 270, 1195, ... which is not in OEIS. The same technique applies to any D4-invariant family of rectangulations.
+
+The paper (Asinowski et al. 2024) introduces several new counting sequences. Each can be D4-reduced:
+
+| Family | Sequence | OEIS | D4 reduction |
+|---|---|---|---|
+| Weak guillotine (Schroder) | 1, 2, 6, 22, 90, 394, ... | A006318 | 1, 1, 2, 6, 18, 68, ... (computed, not in OEIS) |
+| Strong guillotine | 1, 2, 6, 24, 114, 606, ... | none | not yet computed |
+| All strong rectangulations | 1, 2, 6, 24, 116, 642, ... | A342141 | not yet computed |
+| One-sided rectangulations | 1, 2, 6, 20, 72, 274, ... | A348351 | not yet computed |
+
+To compute D4 orbits of strong guillotine rectangulations: enumerate all diagonal choices at cross junctions within each weak tiling (2^k strong classes per weak class with k junctions), then group the resulting strong classes by D4 orbit. The multiplicity per weak class follows the paper's Section 5.3 recurrence. The D4 tree operations are already in `tiling.ml`.
