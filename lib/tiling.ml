@@ -24,7 +24,8 @@ let rec tree_to_string is_h = function
 
 let to_string (is_h, t) = tree_to_string is_h t
 
-(* Split tile [n] in direction [dir].
+(* Split tile [n] in direction [dir].  (Layer 1: operad composition,
+   maps SR_n -> SR_{n+1}.)
    [~side] controls whether the fresh tile goes Before or After [n].
    If the parent frame has the same orientation as [dir], insert next to [n].
    Otherwise, replace [Tile n] with [Frame [Tile n; Tile fresh]]. *)
@@ -77,7 +78,8 @@ let split ?(side = After) n dir t =
     | Some tree' -> (is_h, tree')
     | None -> t
 
-(* Close tile [n]: remove it from the tiling.
+(* Close tile [n]: remove it from the tiling.  (Layer 1: operad inverse,
+   maps SR_{n+1} -> SR_n.)
    When a frame collapses to a single child, that child moves up one depth
    level, so the orientation at that position flips. *)
 let close n t =

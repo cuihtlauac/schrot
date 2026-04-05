@@ -111,7 +111,7 @@ Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement 
 
 - Zeidler, Weber, Gavryushkin, Lutteroth. "Tiling Algebra for Constraint-based Layout Editing." J. Logical and Algebraic Methods in Programming, 2017. — Tabstops as shared constraint variables; adjacency = shared tabstop.
 - Eppstein, Mumford, Speckmann, Verbeek. "Area-Universal and Constrained Rectangular Layouts." SIAM J. Computing, 2012. — Area-universality iff one-sided; point contact excluded from adjacency; adjacency depends on split ratios in non-one-sided layouts.
-- Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees.
+- Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees. Operad structure: split = composition, Schroder numbers count tilings.
 - Asinowski, Cardinal, Felsner, Fusy. "Combinatorics of rectangulations: Old and new bijections." 2024. — P_a is a planar 2-dimensional lattice (Prop. 9); strong poset, flip graph, permutation bijections, guillotine characterization via windmill avoidance.
 - Reading. "Generic rectangulations." Europ. J. Comb., 33(4):610-623, 2012. — Strong equivalence classes form a lattice congruence of the weak Bruhat order; 2-clumped permutations. Foundation for the flip graph lattice structure.
 - Pilaud, Santos. "Quotientopes." Bull. London Math. Soc., 51(3):406-420, 2019. — Any lattice congruence of the weak Bruhat order on S_n yields a polytope (quotientope) whose skeleton is the flip graph. Proves the rectangulation flip graph is polytopal.
@@ -150,13 +150,46 @@ After any significant design discussion, implementation, or literature review:
 
 ## Theoretical framework
 
-The tiling algebra (Zeidler et al. 2017) provides the specification language:
-- `|` (beside) and `/` (stacked) operators on rectangular areas
-- Tabstops as shared constraint variables (x-tabs, y-tabs)
-- D4 symmetry (dihedral group of the square)
-- Fragments under | and / form cancellative semigroups with involution
+Three layers of algebraic structure govern tiling operations, each with its own mathematical object, operations, and symmetry:
 
-The Schroder tree connection: large Schroder numbers count rectangular tilings. Each Schroder tree shape with a root orientation tag uniquely determines a tiling topology. The algebra states geometric policies, term rewriting implements them at runtime (no solver needed), and proofs connect the two.
+### Layer 1 — Between sizes: the Hipparchus operad
+
+**Object**: the family of guillotine tilings across all sizes n = 1, 2, 3, ...
+**Operations**: split (SR_n → SR_{n+1}), close (SR_{n+1} → SR_n).
+**Structure**: operad — composition replaces a tile with a sub-tiling.
+**Reference**: Baez 2022 (Hipparchus operad); Schroder numbers count tilings.
+
+Split and close change the number of tiles. They are maps between quotientopes at different n. In operad language, split is composition: given a tiling of size n, replace a tile with a 2-tile sub-tiling to get a tiling of size n+1. Close is the partial inverse. Whether these maps are lattice morphisms (preserving the quotientope structure at each level) is an open question.
+
+In the codebase: `Tiling.split` and `Tiling.close` implement these directly on Schroder trees.
+
+### Layer 2 — Fixed size: the quotientope
+
+**Object**: the set SR_n of strong rectangulations of size n.
+**Operations**: 3 flip types (simple flip, pivot, wall slide) — 5 under the full classification, 3 under D4.
+**Structure**: the flip graph is the skeleton of a convex polytope (quotientope), and its orientation is a lattice.
+**References**: Reading 2012 (lattice congruence); Pilaud-Santos 2019 (polytopality); Asinowski et al. 2024, Theorem 22 (the 5 flip types).
+
+Flips preserve size. They are the cover relations of the lattice on SR_n: every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join. The polytope structure guarantees connectivity (any tiling can reach any other through a sequence of flips) and rules out dead ends.
+
+In the codebase: the 3 flip types map to Schroder tree operations — toggle Frame orientation (simple flip), extract leaf into parent frame (pivot, with merge-into-context for alternation), swap adjacent children (wall slide). These replace the legacy 7-rule binary rewrite system. See `lib/rewrite.ml` TODO.
+
+### Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
+
+**Object**: the set of strong representatives within one weak equivalence class (= one Schroder tree with varying split positions).
+**Operations**: segment sliding (continuous geometry change).
+**Structure**: the adjacency poset P_a is a planar 2-dimensional lattice, encoded as the intersection of two total orders.
+**Reference**: Asinowski et al. 2024, Proposition 9.
+
+Segment sliding preserves the tree but changes which tiles are adjacent. At cross junctions, sliding a cut past the degenerate point switches the diagonal adjacency, changing the strong equivalence class. The two-order encoding tracks this topology change smoothly: both orders agree when all cross junctions are resolved, and diverge on incomparable pairs at unresolved junctions.
+
+In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2).
+
+### Connections between layers
+
+- D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders).
+- The tiling algebra (Zeidler et al. 2017) provides the specification language (`|` beside, `/` stacked, tabstops as shared constraint variables). Split and close are the algebra's introduction and elimination rules; flips are its equational theory.
+- The three layers suggest a three-level verification strategy: visual SVG (all layers), model checking (layers 1-2), Rocq proof (all layers, with the tiebreaker correctness and lattice morphism questions as proof obligations).
 
 ## Branches
 
