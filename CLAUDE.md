@@ -113,6 +113,8 @@ Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement 
 - Eppstein, Mumford, Speckmann, Verbeek. "Area-Universal and Constrained Rectangular Layouts." SIAM J. Computing, 2012. — Area-universality iff one-sided; point contact excluded from adjacency; adjacency depends on split ratios in non-one-sided layouts.
 - Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees.
 - Asinowski, Cardinal, Felsner, Fusy. "Combinatorics of rectangulations: Old and new bijections." 2024. — P_a is a planar 2-dimensional lattice (Prop. 9); strong poset, flip graph, permutation bijections, guillotine characterization via windmill avoidance.
+- Reading. "Generic rectangulations." Europ. J. Comb., 33(4):610-623, 2012. — Strong equivalence classes form a lattice congruence of the weak Bruhat order; 2-clumped permutations. Foundation for the flip graph lattice structure.
+- Pilaud, Santos. "Quotientopes." Bull. London Math. Soc., 51(3):406-420, 2019. — Any lattice congruence of the weak Bruhat order on S_n yields a polytope (quotientope) whose skeleton is the flip graph. Proves the rectangulation flip graph is polytopal.
 
 ## Move compilation (binary layer)
 
