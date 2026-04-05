@@ -198,11 +198,31 @@ Each layer corresponds to a mode of user interaction with the compositor. The ke
 | Tile | split key | Open a window | 1 (operad) | `Tiling.split` |
 | Tile | close key | Close a window | 1 (operad) | `Tiling.close` |
 | Tile | arrow | Move/swap the tile | 2 (quotientope) | TODO: 3 flip types |
+| Tile | modifier+arrow | Grow the tile in a direction | 3→1 (cross-layer) | TODO: see below |
 | Segment | arrow | Slide the segment by one step | 3 (2D lattice) | TODO: split ratio update |
 
 Segment focus makes Layer 3 keyboard-driven without mouse drag. A segment is a tabstop — already a first-class object via `tabstop_extract`, where each Frame boundary has an identity. Selecting a segment = selecting a tabstop. Moving it = changing the split ratio of the corresponding Frame node, by a fixed increment quantum. The command compiler translates both focus modes: tile-focused arrows → find neighbor, select flip type, apply; segment-focused arrows → adjust split ratio, recompute adjacency.
 
 Resize is not yet modeled incrementally — `resolve_splits` computes positions from scratch. The incremental version would update one Frame's split ratio and call `Poset.of_geom` on the resulting geometry. `Poset.of_geom` is ready for this — it takes any `Geom.t`, not just one from `resolve_splits`.
+
+### Grow operation (lead, not yet designed)
+
+A possible third tile-focus action: modifier+arrow grows the focused tile in a direction, consuming adjacent space. This is a **cross-layer operation** — Layer 3 (segment slide) with a Layer 1 callback (eviction when a neighbor is consumed):
+
+```
+grow(T, dir, quantum):
+  1. s ← boundary segment of T in direction dir   (tabstop lookup)
+  2. move s by quantum in dir                      (Layer 3: ratio change)
+  3. for each tile on the far side of s with size < minimum:
+       evict(tile)                                 (Layer 1: close + policy)
+```
+
+The eviction policy is an open design question:
+- **Destroy**: `close(tile)`. Simplest. Loses the window.
+- **Displace**: `close(tile)` then `split(target, dir)` to reinsert elsewhere. Preserves all windows. Needs a placement policy to choose the reinsertion target.
+- **Compress**: enforce a minimum tile size, growth stops at the limit. Pure Layer 3, no eviction.
+
+The mathematical semantics: grow is a Layer 3 operation parameterized by a Layer 1 eviction callback. The segment slide is primary; eviction is a boundary condition triggered when the geometry degenerates. This keeps the layers cleanly separated — the resize logic doesn't need to know the eviction policy.
 
 ### Connections between layers
 
