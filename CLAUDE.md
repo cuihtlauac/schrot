@@ -191,18 +191,18 @@ In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. 
 
 ### Mapping to Hyprland user actions
 
-Each layer corresponds to a mode of user interaction with the compositor:
+Each layer corresponds to a mode of user interaction with the compositor. The keyboard interface uses two focus modes — tile focus and segment focus — sharing the same arrow-key vocabulary:
 
-| User action | Layer | Operation | Codebase entry point |
-|---|---|---|---|
-| Open a window | 1 (operad) | split | `Tiling.split` |
-| Close a window | 1 (operad) | close | `Tiling.close` |
-| Move/swap a window | 2 (quotientope) | flip | TODO: 3 flip types in `rewrite.ml` |
-| Resize by dragging a border | 3 (2D lattice) | segment slide | TODO: mutable split positions |
+| Focus | Keys | Action | Layer | Codebase entry point |
+|---|---|---|---|---|
+| Tile | split key | Open a window | 1 (operad) | `Tiling.split` |
+| Tile | close key | Close a window | 1 (operad) | `Tiling.close` |
+| Tile | arrow | Move/swap the tile | 2 (quotientope) | TODO: 3 flip types |
+| Segment | arrow | Slide the segment by one step | 3 (2D lattice) | TODO: split ratio update |
 
-A Hyprland plugin needs exactly 4 entry points, one per row. The command compiler (`command.ml`) translates spatial intent ("move window 3 left") into the appropriate operation: find the neighbor with `Tiling.neighbor`, determine which flip type achieves the move (wall slide if siblings, pivot if different frames, simple flip if reorienting), apply it. One flip per user action, not a rule sequence.
+Segment focus makes Layer 3 keyboard-driven without mouse drag. A segment is a tabstop — already a first-class object via `tabstop_extract`, where each Frame boundary has an identity. Selecting a segment = selecting a tabstop. Moving it = changing the split ratio of the corresponding Frame node, by a fixed increment quantum. The command compiler translates both focus modes: tile-focused arrows → find neighbor, select flip type, apply; segment-focused arrows → adjust split ratio, recompute adjacency.
 
-Resize (Layer 3) is not yet modeled — `resolve_splits` computes positions from scratch. A Hyprland plugin would need incremental geometry: drag a border, update one split ratio, recompute adjacency. `Poset.of_geom` is ready for this — it takes any `Geom.t`, not just one from `resolve_splits`.
+Resize is not yet modeled incrementally — `resolve_splits` computes positions from scratch. The incremental version would update one Frame's split ratio and call `Poset.of_geom` on the resulting geometry. `Poset.of_geom` is ready for this — it takes any `Geom.t`, not just one from `resolve_splits`.
 
 ### Connections between layers
 
