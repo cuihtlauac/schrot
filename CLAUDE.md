@@ -187,6 +187,21 @@ Segment sliding preserves the tree but changes which tiles are adjacent. At cros
 
 In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2).
 
+### Mapping to Hyprland user actions
+
+Each layer corresponds to a mode of user interaction with the compositor:
+
+| User action | Layer | Operation | Codebase entry point |
+|---|---|---|---|
+| Open a window | 1 (operad) | split | `Tiling.split` |
+| Close a window | 1 (operad) | close | `Tiling.close` |
+| Move/swap a window | 2 (quotientope) | flip | TODO: 3 flip types in `rewrite.ml` |
+| Resize by dragging a border | 3 (2D lattice) | segment slide | TODO: mutable split positions |
+
+A Hyprland plugin needs exactly 4 entry points, one per row. The command compiler (`command.ml`) translates spatial intent ("move window 3 left") into the appropriate operation: find the neighbor with `Tiling.neighbor`, determine which flip type achieves the move (wall slide if siblings, pivot if different frames, simple flip if reorienting), apply it. One flip per user action, not a rule sequence.
+
+Resize (Layer 3) is not yet modeled — `resolve_splits` computes positions from scratch. A Hyprland plugin would need incremental geometry: drag a border, update one split ratio, recompute adjacency. `Poset.of_geom` is ready for this — it takes any `Geom.t`, not just one from `resolve_splits`.
+
 ### Connections between layers
 
 - D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders).
@@ -199,13 +214,12 @@ In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. 
 
 ## Future directions
 
-- Migrate rewrite rules and policies from binary Term.t to Schroder Tiling.t
-- Move compilation on Schroder trees (n-ary slide, exchange, promote/demote)
+- **Layer 2 implementation**: replace the 7 legacy binary rewrite rules with the 3 Schroder flip types (see `lib/rewrite.ml` TODO). Command compiler: `neighbor` → flip type selection → apply.
+- **Layer 3 implementation**: mutable split positions, incremental `Poset.of_geom` after single-segment updates. Entry point for Hyprland border-drag resize.
 - Model checking with Schroder enumeration (fewer topologies than binary)
-- Split-ratio/aspect annotations per frame
 - Three-level verification: visual SVG → model checking → Rocq proof
 - D4 orbit reduction of the paper's counting sequences (see below)
-- Dynamic geometry: user-controlled segment sliding, poset topology tracking
+- Proof obligations for Rocq: tiebreaker correctness (poset.ml), lattice morphism of split/close (open question)
 
 ### D4 reduction of counting sequences
 
