@@ -1,4 +1,6 @@
-(* TODO: Bring up to Schroder tilings *)
+(* TODO: Replace with command compiler targeting the 3 Schroder tree
+   operations (simple flip, pivot, wall slide) instead of the 7
+   binary-tree rewrite rules.  See lib/rewrite.ml for details. *)
 type dir = Path.dir = Left | Right | Up | Down
 
 type t =

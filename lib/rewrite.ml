@@ -1,4 +1,26 @@
-(* TODO: Bring up to Schroder tilings *)
+(* TODO: Replace with 3 principled Schroder tree operations.
+
+   This module (7 binary-tree rules: Swap, Promote, Demote, Rotate,
+   Transpose, Slide, Exchange) should be replaced by 3 operations on
+   Schroder trees derived from the paper's flip graph (Asinowski et al.
+   2024, Theorem 22, Figure 19):
+
+   1. Simple flip — toggle orientation of a 2-ary sub-tiling.
+   2. Pivot — extract a leaf from a nested frame into the parent frame
+      (parent grows by one child).  At non-root positions, the naive
+      rotation h(v(i,k), j) -> v(i, h(k,j)) is INVALID because it
+      breaks alternation; instead, the result v-frame must merge into
+      the parent v-context: v(..., h(v(i,k), j), ...) -> v(..., i, h(k,j), ...).
+   3. Wall slide — swap two adjacent children within a frame.
+
+   All three preserve Schroder invariants by construction (no same-type
+   nesting, >= 2 children, alternating orientation), hence stay within
+   guillotine.  The paper proves completeness: these generate all
+   transitions between strong rectangulations.  D4 reduces the 5 paper
+   flip types to these 3 orbits.
+
+   See also: lib/poset.ml (adjacency poset encoding), CLAUDE.md
+   ("D4 reduction of counting sequences" and "Adjacency poset"). *)
 type rule =
   | Split_h of int
   | Split_v of int
