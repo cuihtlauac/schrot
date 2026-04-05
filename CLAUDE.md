@@ -1,6 +1,8 @@
 # Schrot
 
-A tiling window manager algebra in OCaml. Schroder trees represent tiling topologies (1-to-1 correspondence). Low-level rewrite rules transform trees; a high-level command compiler translates spatial intent (move, split, close) into rule sequences. The project is heading toward formally verified configurable policies (visual → model checking → Rocq).
+An exploration framework for principled tiling window management, targeting Hyprland. The goal is to work out the mathematics of tiling operations — split, close, move — using simplified geometry (SVG rendering) and a language where data structure invariants are easy to express (OCaml), without the complexities of a real compositor. The resulting algebra and algorithms are intended to be ported to Hyprland's C++ once the theory is solid.
+
+Schroder trees represent tiling topologies (1-to-1 correspondence with guillotine partitions). Three layers of algebraic structure govern operations: an operad (split/close between sizes), a quotientope (flips at fixed size), and a 2-dimensional lattice (geometry within a fixed tree). The project is heading toward formally verified configurable policies (visual SVG → model checking → Rocq proof).
 
 ## Build
 
