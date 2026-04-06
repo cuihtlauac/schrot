@@ -14,6 +14,8 @@ dune exec bin/main.exe -- --output out.svg    # interactive, reads rules from st
 dune exec bin/test_svg.exe -- --output svg       # generates svg/{policy}_{open_close,move}.svg
 dune exec bin/tiling_test.exe -- --output svg    # Schroder tiling enumeration + open/close SVGs
 dune exec bin/model_check.exe -- --policy dominance --max-leaves 6
+dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
+dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 
@@ -26,7 +28,7 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
-- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. `split`, `close`, `neighbor` (tree-based navigation). Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
+- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. Layer 1: `split`, `close`, `neighbor` (tree-based navigation). Layer 2: `simple_dissolve`, `simple_create`, `pivot_out`, `pivot_in`, `wall_slide` (the 3 atomic flip types generating the quotientope flip graph); `enumerate_flips` (all applicable flips); `flip_to_string`. Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
 - `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`.
 - `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t, edges colored by `cut_depth`). Legacy `render_group`/`render`/`render_interactive` for binary Term.t (marked TODO).
 - `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_shrot_N.svg` (one representative per D4 orbit with tree + adjacency graph), `svg/operations.svg`. Supports `--max-svg N` to skip SVG for large N.
@@ -36,6 +38,8 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `bin/cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree.
 - `lib/poset.ml` — Adjacency poset as a 2-dimensional lattice (Asinowski et al. 2024, Prop. 9). `Poset.t` holds two rank maps (linear extensions of P_a) whose intersection is the partial order. `of_geom`, `compare`, `is_covering`, `coverings`, `minimum`, `maximum`. Poset direction: `a < b` means a is left-of or below b.
 - `bin/poset_check.ml` — Verifies poset encoding: (A) every geometric edge is comparable, (B) every covering is a geometric edge, (C) antisymmetry, (D) extrema exist. Verified up to n=8 (10,879 tilings).
+- `bin/flip_test.ml` — SVG visualization of all 5 flip operations on example tilings. Generates `svg/flips.svg`.
+- `bin/flip_check.ml` — Model checker for flip properties: (A) size preservation, (B) validity, (C) invertibility, (D) connectivity. Verified A/B/D up to n=7 (1806 tilings). C: ~40% directly invertible; the rest are multi-level pivots.
 
 ### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
@@ -176,7 +180,7 @@ In the codebase: `Tiling.split` and `Tiling.close` implement these directly on S
 
 Flips preserve size. They are the cover relations of the lattice on SR_n: every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join. The polytope structure guarantees connectivity (any tiling can reach any other through a sequence of flips) and rules out dead ends.
 
-In the codebase: the 3 flip types map to Schroder tree operations — toggle Frame orientation (simple flip), extract leaf into parent frame (pivot, with merge-into-context for alternation), swap adjacent children (wall slide). These replace the legacy 7-rule binary rewrite system. See `lib/rewrite.ml` TODO.
+In the codebase: `simple_dissolve`/`simple_create` (simple flip: dissolve or create a 2-ary all-Tile sub-frame), `pivot_out`/`pivot_in` (pivot: extract or insert a boundary leaf across Frame levels, with merge-into-context for alternation), `wall_slide` (swap two consecutive children). `enumerate_flips` generates all applicable flips for a tiling. Verified: size preservation, validity, and flip graph connectivity up to n=7. See also `lib/rewrite.ml` TODO for the legacy binary layer these replace.
 
 ### Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
 
@@ -236,7 +240,7 @@ The mathematical semantics: grow is a Layer 3 operation parameterized by a Layer
 
 ## Future directions
 
-- **Layer 2 implementation**: replace the 7 legacy binary rewrite rules with the 3 Schroder flip types (see `lib/rewrite.ml` TODO). Command compiler: `neighbor` → flip type selection → apply.
+- **Layer 2 refinement**: pivot_in insert mode (grow Frame, inverse of pivot_out from >=3-ary). Command compiler: `neighbor` → flip type selection → apply. Distinguish single-cover pivots from multi-cover jumps.
 - **Layer 3 implementation**: mutable split positions, incremental `Poset.of_geom` after single-segment updates. Entry point for Hyprland border-drag resize.
 - Model checking with Schroder enumeration (fewer topologies than binary)
 - Three-level verification: visual SVG → model checking → Rocq proof

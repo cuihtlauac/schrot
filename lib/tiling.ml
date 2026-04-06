@@ -924,3 +924,462 @@ let relabel (is_h, tree) =
       Schrot.Frame (List2.map go children)
   in
   (is_h, go tree)
+
+(* --- Layer 2: Quotientope flips --- *)
+
+(* The 3 atomic flip types (Asinowski et al. 2024, Theorem 22) that generate
+   all cover relations of the lattice on strong rectangulations.
+   D4 reduces the paper's 5 flip types to these 3 orbits. *)
+
+type flip =
+  | Simple_dissolve of int
+  | Simple_create of int * int
+  | Pivot_out of int
+  | Pivot_in of int * int  (* (tile to push, tile to pair with) *)
+  | Wall_slide of int * int
+
+let rec contains_leaf n = function
+  | Schrot.Tile k -> k = n
+  | Schrot.Frame children ->
+    List2.exists (contains_leaf n) children
+
+(* Wall slide: swap two consecutive children within a Frame.
+   [a] and [b] identify the two children by a leaf they contain.
+   Self-inverse. *)
+let wall_slide a b t =
+  let rec go_tree = function
+    | Schrot.Tile _ -> None
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      match go_children ch with
+      | Some ch' ->
+        (match List2.of_list_opt ch' with
+         | Some ch2 -> Some (Schrot.Frame ch2)
+         | None -> assert false)
+      | None -> None
+  and go_children = function
+    | [] -> None
+    | [_] -> None
+    | x :: y :: rest ->
+      let xa = contains_leaf a x and xb = contains_leaf b x in
+      let ya = contains_leaf a y and yb = contains_leaf b y in
+      if (xa && yb) || (xb && ya) then
+        (* a and b are in consecutive children x, y: swap *)
+        Some (y :: x :: rest)
+      else if xa && xb then
+        (* both in x: recurse into x *)
+        (match go_tree x with
+         | Some x' -> Some (x' :: y :: rest)
+         | None -> None)
+      else
+        (* try further along *)
+        (match go_children (y :: rest) with
+         | Some rest' -> Some (x :: rest')
+         | None -> None)
+  in
+  let is_h, tree = t in
+  match go_tree tree with
+  | Some tree' -> Some (is_h, tree')
+  | None -> None
+
+(* Simple dissolve: dissolve a 2-ary Frame whose children are both Tiles.
+   At root: flip is_h.  At non-root: splice the two Tiles into the parent. *)
+let simple_dissolve n t =
+  let is_h, tree = t in
+  match tree with
+  | Schrot.Frame (Cons2 (Tile a, Tile b, []))
+    when a = n || b = n ->
+    (* Root case: flip is_h *)
+    Some (not is_h, tree)
+  | Schrot.Frame _ ->
+    (* Non-root: find and dissolve in subtree *)
+    let rec go_list = function
+      | [] -> None
+      | child :: rest ->
+        match child with
+        | Schrot.Frame (Cons2 (Tile a, Tile b, []))
+          when a = n || b = n ->
+          (* Found: splice the two Tiles into parent's list *)
+          Some (Schrot.Tile a :: Schrot.Tile b :: rest)
+        | Schrot.Frame sub ->
+          (match go_frame sub with
+           | Some child' -> Some (child' :: rest)
+           | None ->
+             match go_list rest with
+             | Some rest' -> Some (child :: rest')
+             | None -> None)
+        | Schrot.Tile _ ->
+          (match go_list rest with
+           | Some rest' -> Some (child :: rest')
+           | None -> None)
+    and go_frame children =
+      match go_list (List2.to_list children) with
+      | None -> None
+      | Some new_list ->
+        match List2.of_list_opt new_list with
+        | Some ch -> Some (Schrot.Frame ch)
+        | None -> assert false
+    in
+    (match go_frame (match tree with Schrot.Frame ch -> ch | _ -> assert false) with
+     | Some tree' -> Some (is_h, tree')
+     | None -> None)
+  | Schrot.Tile _ -> None
+
+(* Simple create: wrap two consecutive Tile siblings into a new 2-ary sub-Frame.
+   Parent must have >= 3 children. *)
+let simple_create a b t =
+  let rec go_tree = function
+    | Schrot.Tile _ -> None
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      let len = List.length ch in
+      match go_create ch len with
+      | Some ch' ->
+        (match List2.of_list_opt ch' with
+         | Some ch2 -> Some (Schrot.Frame ch2)
+         | None -> assert false)
+      | None ->
+        (* Recurse into children *)
+        (match go_children ch with
+         | Some ch' ->
+           (match List2.of_list_opt ch' with
+            | Some ch2 -> Some (Schrot.Frame ch2)
+            | None -> assert false)
+         | None -> None)
+  and go_create ch len = match ch with
+    | [] | [_] -> None
+    | (Schrot.Tile x) :: (Schrot.Tile y) :: rest
+      when ((x = a && y = b) || (x = b && y = a)) && len >= 3 ->
+      let wrapped = Schrot.Frame (List2.Cons2 (Tile x, Tile y, [])) in
+      Some (wrapped :: rest)
+    | x :: rest ->
+      (match go_create rest len with
+       | Some rest' -> Some (x :: rest')
+       | None -> None)
+  and go_children = function
+    | [] -> None
+    | child :: rest ->
+      (match go_tree child with
+       | Some child' -> Some (child' :: rest)
+       | None ->
+         match go_children rest with
+         | Some rest' -> Some (child :: rest')
+         | None -> None)
+  in
+  let is_h, tree = t in
+  match go_tree tree with
+  | Some tree' -> Some (is_h, tree')
+  | None -> None
+
+(* Pivot out: extract boundary leaf [n] from its parent Frame S into
+   the grandparent Frame G.  At non-root, the result splices into the
+   great-grandparent because its orientation matches. *)
+let pivot_out n t =
+  (* Try to pivot leaf [n] out of a child Frame S of the given Frame G.
+     Returns Some of a *list* of replacement nodes (the splice), or None. *)
+  let try_pivot_from_children ch =
+    let rec scan before = function
+      | [] -> None
+      | (Schrot.Frame sub_ch) :: after ->
+        let sub = List2.to_list sub_ch in
+        let len = List.length sub in
+        let first_is_n = match sub with
+          | Schrot.Tile k :: _ -> k = n
+          | _ -> false
+        in
+        let last_is_n = match List.rev sub with
+          | Schrot.Tile k :: _ -> k = n
+          | _ -> false
+        in
+        if first_is_n && len = 2 then begin
+          (* n is first child of 2-ary S.  Remove it, form [Tile n; G']. *)
+          let remainder = List.tl sub in
+          let s' = match remainder with
+            | [single] -> single
+            | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+            | [] -> assert false
+          in
+          let g'_ch = List.rev_append before (s' :: after) in
+          let g' = match g'_ch with
+            | [single] -> single
+            | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+            | [] -> assert false
+          in
+          Some (Schrot.Tile n :: [g'])
+        end
+        else if last_is_n && len = 2 then begin
+          (* n is last child of 2-ary S.  Remove it, form [G'; Tile n]. *)
+          let all_but_last = List.filteri (fun i _ -> i < len - 1) sub in
+          let s' = match all_but_last with
+            | [single] -> single
+            | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+            | [] -> assert false
+          in
+          let g'_ch = List.rev_append before (s' :: after) in
+          let g' = match g'_ch with
+            | [single] -> single
+            | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+            | [] -> assert false
+          in
+          Some (g' :: [Schrot.Tile n])
+        end
+        else
+          scan (Schrot.Frame sub_ch :: before) after
+      | child :: after ->
+        scan (child :: before) after
+    in
+    scan [] ch
+  in
+  (* Recursively descend: at each Frame, check if any child Frame S
+     has n as a boundary child.  If yes, splice the rotation result.
+     If no, recurse into children and propagate splices upward. *)
+  let rec go_tree = function
+    | Schrot.Tile _ -> None
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      match try_pivot_from_children ch with
+      | Some splice ->
+        (* This Frame is G.  Return the splice for the parent to inline. *)
+        Some (`Splice splice)
+      | None ->
+        (* Recurse into children looking for a deeper G. *)
+        go_children_deep [] ch
+  and go_children_deep before = function
+    | [] -> None
+    | child :: after ->
+      (match go_tree child with
+       | Some (`Splice splice) ->
+         (* A child was G.  Inline the splice here. *)
+         let new_ch = List.rev_append before (splice @ after) in
+         (match new_ch with
+          | [single] -> Some (`Tree single)
+          | a :: b :: rest -> Some (`Tree (Schrot.Frame (List2.Cons2 (a, b, rest))))
+          | [] -> assert false)
+       | Some (`Tree child') ->
+         let new_ch = List.rev_append before (child' :: after) in
+         (match new_ch with
+          | [single] -> Some (`Tree single)
+          | a :: b :: rest -> Some (`Tree (Schrot.Frame (List2.Cons2 (a, b, rest))))
+          | [] -> assert false)
+       | None ->
+         go_children_deep (child :: before) after)
+  in
+  let is_h, tree = t in
+  match tree with
+  | Schrot.Tile _ -> None
+  | Schrot.Frame children ->
+    let ch = List2.to_list children in
+    match try_pivot_from_children ch with
+    | Some splice ->
+      (* Root is G.  The splice becomes the new root with flipped is_h. *)
+      (match splice with
+       | [a; b] -> Some (not is_h, Schrot.Frame (List2.Cons2 (a, b, [])))
+       | _ -> assert false)
+    | None ->
+      (match go_children_deep [] ch with
+       | Some (`Splice _) ->
+         assert false  (* go_children_deep always wraps splices into Tree *)
+       | Some (`Tree tree') ->
+         Some (is_h, tree')
+       | None -> None)
+
+(* Pivot in: two modes.
+   Wrap mode: Tile [n] adjacent to a Frame G in some parent P.
+     Create a 2-ary sub-frame with n and G's boundary child containing [m].
+     Inverse of pivot_out from a 2-ary S that collapsed.
+   Insert mode: remove Tile [n] from tree, insert it next to Tile [m]
+     (which must be a direct boundary child of its Frame).
+     Inverse of pivot_out from a 2-ary S inside a >=3-ary G. *)
+let pivot_in n m t =
+  (* --- Wrap mode: scan for Tile n adjacent to Frame containing m --- *)
+  let rec wrap_tree = function
+    | Schrot.Tile _ -> None
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      (match wrap_scan [] ch with
+       | Some result -> Some result
+       | None -> wrap_children [] ch)
+  and wrap_scan before = function
+    | [] -> None
+    | (Schrot.Tile k) :: after when k = n ->
+      let try_after = match after with
+        | (Schrot.Frame sub_ch) :: rest ->
+          let sub = List2.to_list sub_ch in
+          let first = List.hd sub in
+          let last = List.nth sub (List.length sub - 1) in
+          if contains_leaf m first then
+            let w = Schrot.Frame (List2.Cons2 (Schrot.Tile n, first, [])) in
+            let ns = w :: List.tl sub in
+            let nf = match List2.of_list_opt ns with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append before (nf :: rest))
+          else if contains_leaf m last && not (contains_leaf m first) then
+            let len = List.length sub in
+            let init = List.filteri (fun i _ -> i < len - 1) sub in
+            let w = Schrot.Frame (List2.Cons2 (Schrot.Tile n, last, [])) in
+            let nf = match List2.of_list_opt (init @ [w]) with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append before (nf :: rest))
+          else None
+        | _ -> None
+      in
+      let try_before () = match before with
+        | (Schrot.Frame sub_ch) :: rest_before ->
+          let sub = List2.to_list sub_ch in
+          let first = List.hd sub in
+          let last = List.nth sub (List.length sub - 1) in
+          if contains_leaf m last then
+            let len = List.length sub in
+            let init = List.filteri (fun i _ -> i < len - 1) sub in
+            let w = Schrot.Frame (List2.Cons2 (last, Schrot.Tile n, [])) in
+            let nf = match List2.of_list_opt (init @ [w]) with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append rest_before (nf :: after))
+          else if contains_leaf m first && not (contains_leaf m last) then
+            let w = Schrot.Frame (List2.Cons2 (first, Schrot.Tile n, [])) in
+            let ns = w :: List.tl sub in
+            let nf = match List2.of_list_opt ns with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append rest_before (nf :: after))
+          else None
+        | _ -> None
+      in
+      (match try_after with Some _ as r -> r | None -> try_before ())
+    | x :: after -> wrap_scan (x :: before) after
+  and rebuild new_ch =
+    match List2.of_list_opt new_ch with
+    | Some ch2 -> Some (`Tree (Schrot.Frame ch2))
+    | None -> (match new_ch with [s] -> Some (`Collapse s) | _ -> assert false)
+  and wrap_children before = function
+    | [] -> None
+    | child :: after ->
+      (match wrap_tree child with
+       | Some (`Tree c) | Some (`Collapse c) ->
+         let nc = List.rev_append before (c :: after) in
+         rebuild nc
+       | None -> wrap_children (child :: before) after)
+  in
+  (* --- Insert mode: Tile n adjacent to Frame G in parent, Tile m is a
+     direct boundary child of G.  Remove n from parent, insert n into G
+     next to m (growing G by 1). --- *)
+  let rec insert_tree = function
+    | Schrot.Tile _ -> None
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      (match insert_scan [] ch with
+       | Some result -> Some result
+       | None -> insert_children [] ch)
+  and insert_scan before = function
+    | [] -> None
+    | (Schrot.Tile k) :: after when k = n ->
+      (* Found Tile n.  Check adjacent Frame with m as direct boundary Tile. *)
+      let try_after = match after with
+        | (Schrot.Frame sub_ch) :: rest ->
+          let sub = List2.to_list sub_ch in
+          let first_is_m = (match sub with Schrot.Tile j :: _ -> j = m | _ -> false) in
+          let last_is_m = (match List.rev sub with Schrot.Tile j :: _ -> j = m | _ -> false) in
+          if first_is_m then
+            (* Insert n before m in G *)
+            let new_sub = Schrot.Tile n :: sub in
+            let nf = match List2.of_list_opt new_sub with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append before (nf :: rest))
+          else if last_is_m then
+            let new_sub = sub @ [Schrot.Tile n] in
+            let nf = match List2.of_list_opt new_sub with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append before (nf :: rest))
+          else None
+        | _ -> None
+      in
+      let try_before () = match before with
+        | (Schrot.Frame sub_ch) :: rest_before ->
+          let sub = List2.to_list sub_ch in
+          let first_is_m = (match sub with Schrot.Tile j :: _ -> j = m | _ -> false) in
+          let last_is_m = (match List.rev sub with Schrot.Tile j :: _ -> j = m | _ -> false) in
+          if last_is_m then
+            let new_sub = sub @ [Schrot.Tile n] in
+            let nf = match List2.of_list_opt new_sub with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append rest_before (nf :: after))
+          else if first_is_m then
+            let new_sub = Schrot.Tile n :: sub in
+            let nf = match List2.of_list_opt new_sub with Some c -> Schrot.Frame c | None -> assert false in
+            rebuild (List.rev_append rest_before (nf :: after))
+          else None
+        | _ -> None
+      in
+      (match try_after with Some _ as r -> r | None -> try_before ())
+    | x :: after -> insert_scan (x :: before) after
+  and insert_children before = function
+    | [] -> None
+    | child :: after ->
+      (match insert_tree child with
+       | Some (`Tree c) | Some (`Collapse c) ->
+         let nc = List.rev_append before (c :: after) in
+         rebuild nc
+       | None -> insert_children (child :: before) after)
+  in
+  (* Try wrap first, then insert *)
+  let is_h, tree = t in
+  let try_mode f =
+    match f tree with
+    | Some (`Tree t') -> Some (is_h, t')
+    | Some (`Collapse t') -> Some (not is_h, t')
+    | None -> None
+  in
+  match try_mode wrap_tree with
+  | Some _ as r -> r
+  | None -> try_mode insert_tree
+
+(* Enumerate all applicable flips for a tiling and their results. *)
+let enumerate_flips t =
+  let results = ref [] in
+  let add f t' = results := (f, t') :: !results in
+  let the_leaves = leaves t in
+  List.iter (fun n ->
+    match simple_dissolve n t with
+    | Some t' -> add (Simple_dissolve n) t'
+    | None -> ()
+  ) the_leaves;
+  List.iter (fun a ->
+    List.iter (fun b ->
+      if a < b then
+        match simple_create a b t with
+        | Some t' -> add (Simple_create (a, b)) t'
+        | None -> ()
+    ) the_leaves
+  ) the_leaves;
+  List.iter (fun n ->
+    match pivot_out n t with
+    | Some t' -> add (Pivot_out n) t'
+    | None -> ()
+  ) the_leaves;
+  List.iter (fun n ->
+    List.iter (fun m ->
+      if n <> m then
+        match pivot_in n m t with
+        | Some t' -> add (Pivot_in (n, m)) t'
+        | None -> ()
+    ) the_leaves
+  ) the_leaves;
+  List.iter (fun a ->
+    List.iter (fun b ->
+      if a < b then
+        match wall_slide a b t with
+        | Some t' -> add (Wall_slide (a, b)) t'
+        | None -> ()
+    ) the_leaves
+  ) the_leaves;
+  (* Deduplicate by result *)
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t') ->
+    let key = to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) (List.rev !results)
+
+let flip_to_string = function
+  | Simple_dissolve n -> Printf.sprintf "dissolve %d" n
+  | Simple_create (a, b) -> Printf.sprintf "create %d %d" a b
+  | Pivot_out n -> Printf.sprintf "pivot_out %d" n
+  | Pivot_in (n, m) -> Printf.sprintf "pivot_in %d %d" n m
+  | Wall_slide (a, b) -> Printf.sprintf "slide %d %d" a b
+
+(* Placeholder for future edge count oracle.
+   Dedup makes site-counting unreliable (pivot_in and pivot_out can produce
+   the same result).  Properties C + D together suffice for correctness. *)
+let count_flip_sites _t = -1

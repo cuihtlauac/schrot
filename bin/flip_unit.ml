@@ -1,0 +1,62 @@
+(* Unit tests for flip operations.
+   Add counterexamples from flip_check here as regression tests. *)
+
+let failures = ref 0
+
+let assert_invertible name t flip =
+  let apply = match flip with
+    | Tiling.Simple_dissolve n -> Tiling.simple_dissolve n
+    | Simple_create (a, b) -> Tiling.simple_create a b
+    | Pivot_out n -> Tiling.pivot_out n
+    | Pivot_in (n, m) -> Tiling.pivot_in n m
+    | Wall_slide (a, b) -> Tiling.wall_slide a b
+  in
+  match apply t with
+  | None ->
+    Printf.printf "FAIL %s: flip not applicable\n" name;
+    incr failures
+  | Some t' ->
+    let reverse = Tiling.enumerate_flips t' in
+    let original_str = Tiling.to_string t in
+    let ok = List.exists (fun (_, t'') ->
+      Tiling.to_string t'' = original_str
+    ) reverse in
+    if ok then
+      Printf.printf "OK   %s\n" name
+    else begin
+      Printf.printf "FAIL %s: %s -> %s (no inverse among %d flips)\n"
+        name (Tiling.to_string t) (Tiling.to_string t') (List.length reverse);
+      incr failures
+    end
+
+(* --- Test cases --- *)
+
+(* n=2: simple flip at root *)
+let t_h01 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [])))
+
+(* n=3: all 6 tilings cover the basic operations *)
+let t_h012 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])))
+let t_h_v01_2 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (
+  Frame (List2.Cons2 (Tile 0, Tile 1, [])), Tile 2, [])))
+
+let () =
+  (* Simple flip at root *)
+  assert_invertible "dissolve_root" t_h01 (Simple_dissolve 0);
+  (* Simple create/dissolve *)
+  assert_invertible "create_01" t_h012 (Simple_create (0, 1));
+  assert_invertible "create_12" t_h012 (Simple_create (1, 2));
+  (* Wall slide *)
+  assert_invertible "slide_01" t_h012 (Wall_slide (0, 1));
+  assert_invertible "slide_12" t_h012 (Wall_slide (1, 2));
+  (* Dissolve non-root *)
+  assert_invertible "dissolve_v01" t_h_v01_2 (Simple_dissolve 0);
+  (* Pivot out from 2-ary *)
+  assert_invertible "pivot_out_0" t_h_v01_2 (Pivot_out 0);
+  assert_invertible "pivot_out_1" t_h_v01_2 (Pivot_out 1);
+  (* Summary *)
+  if !failures = 0 then
+    Printf.printf "\nAll unit tests passed.\n"
+  else begin
+    Printf.printf "\n%d unit test(s) FAILED.\n" !failures;
+    exit 1
+  end
