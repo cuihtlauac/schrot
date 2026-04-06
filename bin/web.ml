@@ -232,7 +232,7 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
   Arrows navigate &middot;
   <kbd>Alt</kbd>+Arrow split &middot;
   <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
-  <kbd>Shift</kbd>+Arrow slide &middot;
+  <kbd>Shift</kbd>+Arrow Slide &middot;
   <kbd>d</kbd> dissolve &middot;
   <kbd>x</kbd> exit frame &middot;
   <kbd>f</kbd>+Arrow 2-subframe &middot;

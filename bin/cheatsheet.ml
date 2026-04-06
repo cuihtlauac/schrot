@@ -166,17 +166,20 @@ let () =
   ] (fun _ -> ()) "cheatsheet [--output DIR]";
   (try Sys.mkdir !output_dir 0o755 with Sys_error _ -> ());
 
-  (* Common starting tiling: h(5, v(4, 3, h(v(2, 1), 0)))
+  (* Common starting tiling: h(5, v(4, 3, h(v(2, 1), 0)), 6)
      Geometry:
               5
      -------------------
            |       | 2 | 1
        4   |   3   |-------
            |       |   0
+     -------------------
+              6
 
-     v-frame is 3-ary [4, 3, h(v(2,1), 0)] -> 2-subframe, wall_slide
-     v(2,1) is 2-ary all-Tile inside h-frame -> dissolve, pivot_out
-     Tile 3 adjacent to h-frame in v-frame -> pivot_in
+     v-frame is 3-ary [4, 3, h(v(2,1), 0)] -> 2-subframe, slide
+     v(2,1) is 2-ary all-Tile inside h-frame -> dissolve, exit
+     Tile 3 adjacent to h-frame in v-frame -> enter
+     Tile 6 at bottom makes the v-frame cut non-wall
   *)
   let t : Tiling.t = (true, Schrot.Frame (List2.Cons2 (
     Tile 5,
@@ -184,14 +187,14 @@ let () =
       [Frame (List2.Cons2 (
         Frame (List2.Cons2 (Tile 2, Tile 1, [])),
         Tile 0, []))])),
-    []))) in
+    [Tile 6]))) in
 
   let apply f = match f t with Some t' -> t' | None -> t in
 
   let rows = [
     (* Split: split tile 3 to the right (V, After) *)
     ("Split", "Alt+Right on 3",
-     3, [6],
+     3, [7],
      Some `Right,
      t, Tiling.split 3 Tiling.V t);
 
@@ -201,8 +204,8 @@ let () =
      None,
      t, Tiling.close 3 t);
 
-    (* Wall slide: swap tile 3 with the h(v(2,1),0) sub-frame *)
-    ("Wall slide", "Shift+Right on 3",
+    (* Slide: swap tile 3 with the h(v(2,1),0) sub-frame *)
+    ("Slide", "Shift+Right on 3",
      3, [2; 1; 0],
      Some `Right,
      t, apply (Tiling.wall_slide 3 0));
