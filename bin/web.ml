@@ -226,17 +226,23 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
   <div class="info"><span class="label">Action:</span> <span id="action"></span></div>
   <button class="copy-btn" id="copy" title="Copy transition to clipboard">copy</button>
 </div>
+<div id="mode" style="font-size:14px; min-height:1.4em; color:#f0c040; text-align:center;"></div>
 <div class="help">
   Click tile to select &middot;
-  <kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> move selection &middot;
+  Arrows navigate &middot;
   <kbd>Alt</kbd>+Arrow split &middot;
   <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
-  <kbd>Ctrl+Z</kbd> undo &middot;
-  <kbd>Esc</kbd> deselect
+  <kbd>Shift</kbd>+Arrow slide &middot;
+  <kbd>d</kbd> dissolve &middot;
+  <kbd>x</kbd> exit frame &middot;
+  <kbd>f</kbd>+Arrow 2-subframe &middot;
+  <kbd>e</kbd>+Arrow enter frame &middot;
+  <kbd>Ctrl+Z</kbd> undo
 </div>
 <script>
 let selectedTile = null;
 let currentData = {};
+let pendingMode = null; // 'subframe' or 'enter'
 
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -348,20 +354,59 @@ document.getElementById('copy').addEventListener('click', () => {
   });
 });
 
+function updateMode() {
+  const el = document.getElementById('mode');
+  if (pendingMode) {
+    el.textContent = pendingMode + ' \u2192 arrow';
+    el.style.color = '#f0c040';
+  } else {
+    el.textContent = '';
+  }
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { selectedTile = null; refreshState(); return; }
+  if (e.key === 'Escape') {
+    if (pendingMode) { pendingMode = null; updateMode(); return; }
+    selectedTile = null; refreshState(); return;
+  }
   if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault(); document.getElementById('undo').click(); return;
   }
   if (selectedTile === null) return;
   const dir = { ArrowLeft: 'left', ArrowRight: 'right',
                  ArrowUp: 'up', ArrowDown: 'down' }[e.key];
+
+  // Pending mode: c/i + arrow
+  if (pendingMode && dir) {
+    e.preventDefault();
+    postCommand(pendingMode, selectedTile, dir);
+    pendingMode = null; updateMode();
+    return;
+  }
+  if (pendingMode && !dir) { pendingMode = null; updateMode(); }
+
+  // Alt+Arrow: split.  Alt+Del: close.
   if (e.altKey) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault(); postCommand('close', selectedTile); return;
     }
     if (dir) { e.preventDefault(); postCommand('split', selectedTile, dir); }
-  } else if (dir) {
+    return;
+  }
+  // Shift+Arrow: wall slide
+  if (e.shiftKey && dir) {
+    e.preventDefault(); postCommand('slide', selectedTile, dir); return;
+  }
+  // d: dissolve
+  if (e.key === 'd') { e.preventDefault(); postCommand('dissolve', selectedTile); return; }
+  // x: exit frame
+  if (e.key === 'x') { e.preventDefault(); postCommand('exit', selectedTile); return; }
+  // f: 2-subframe mode (then arrow)
+  if (e.key === 'f') { e.preventDefault(); pendingMode = 'subframe'; updateMode(); return; }
+  // e: enter frame mode (then arrow)
+  if (e.key === 'e') { e.preventDefault(); pendingMode = 'enter'; updateMode(); return; }
+  // Plain arrow: navigate
+  if (dir) {
     e.preventDefault();
     api('POST', '/api/navigate', { tile: String(selectedTile), dir })
       .then(data => {
@@ -423,6 +468,44 @@ let () =
               (if Tiling.size state.tiling > 1
                then Tiling.close tile state.tiling
                else state.tiling)
+            | "slide" ->
+              let arrow = Option.bind (parse_json_field body "dir") arrow_of_string in
+              (match Option.bind arrow (fun a -> Tiling.neighbor tile a state.tiling) with
+               | Some nb ->
+                 let desc = Printf.sprintf "slide %d %d" tile nb in
+                 (match Tiling.wall_slide tile nb state.tiling with
+                  | Some t' -> desc, t'
+                  | None -> desc ^ " (no effect)", state.tiling)
+               | None -> "slide (no neighbor)", state.tiling)
+            | "dissolve" ->
+              let desc = Printf.sprintf "dissolve %d" tile in
+              (match Tiling.simple_dissolve tile state.tiling with
+               | Some t' -> desc, t'
+               | None -> desc ^ " (no effect)", state.tiling)
+            | "subframe" ->
+              let arrow = Option.bind (parse_json_field body "dir") arrow_of_string in
+              (match Option.bind arrow (fun a -> Tiling.neighbor tile a state.tiling) with
+               | Some nb ->
+                 let a, b = min tile nb, max tile nb in
+                 let desc = Printf.sprintf "2-subframe %d %d" a b in
+                 (match Tiling.simple_create a b state.tiling with
+                  | Some t' -> desc, t'
+                  | None -> desc ^ " (no effect)", state.tiling)
+               | None -> "2-subframe (no neighbor)", state.tiling)
+            | "exit" ->
+              let desc = Printf.sprintf "exit %d" tile in
+              (match Tiling.pivot_out tile state.tiling with
+               | Some t' -> desc, t'
+               | None -> desc ^ " (no effect)", state.tiling)
+            | "enter" ->
+              let arrow = Option.bind (parse_json_field body "dir") arrow_of_string in
+              (match Option.bind arrow (fun a -> Tiling.neighbor tile a state.tiling) with
+               | Some nb ->
+                 let desc = Printf.sprintf "enter %d %d" tile nb in
+                 (match Tiling.pivot_in tile nb state.tiling with
+                  | Some t' -> desc, t'
+                  | None -> desc ^ " (no effect)", state.tiling)
+               | None -> "enter (no neighbor)", state.tiling)
             | _ -> "?", state.tiling
           in
           push_history ();
