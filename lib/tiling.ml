@@ -1159,6 +1159,16 @@ let d4_orbit t =
   let fr3 = rot90 fr2 in
   [t; r1; r2; r3; f; fr1; fr2; fr3]
 
+(* Named D4 actions for Burnside decomposition.
+   Order: id, rot90, rot180, rot270, flip_h, flip_v, diag_NE, diag_NW. *)
+let d4_actions : (string * (t -> t)) array =
+  let rot270 t = rot90 (rot90 (rot90 t)) in
+  let flip_v t = rot180 (flip_h t) in
+  let diag_ne t = rot90 (flip_h t) in
+  let diag_nw t = rot270 (flip_h t) in
+  [| ("id", Fun.id); ("rot90", rot90); ("rot180", rot180); ("rot270", rot270);
+     ("flip_h", flip_h); ("flip_v", flip_v); ("diag_ne", diag_ne); ("diag_nw", diag_nw) |]
+
 (* Klein four-group V4 = {id, rot180, flip_h, flip_v}.
    Preserves cut orientations (H stays H, V stays V). *)
 let v4_orbit t =

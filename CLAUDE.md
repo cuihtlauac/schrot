@@ -282,4 +282,4 @@ The paper (Asinowski et al. 2024) introduces several new counting sequences. Eac
 | All strong rectangulations | 1, 2, 6, 24, 116, 642, ... | A342141 | not yet computed |
 | One-sided rectangulations | 1, 2, 6, 20, 72, 274, ... | A348351 | not yet computed |
 
-To compute D4 orbits of strong guillotine rectangulations: enumerate all diagonal choices at cross junctions within each weak tiling (2^k strong classes per weak class with k junctions), then group the resulting strong classes by D4 orbit. The multiplicity per weak class follows the paper's Section 5.3 recurrence. The D4 tree operations are already in `tiling.ml`.
+The D4-reduced count decomposes via Burnside's lemma into (Fix_id + Fix_rot180 + 2·Fix_flip) / 8. For guillotine tilings (n ≥ 2), Fix_rot90 = Fix_rot270 = Fix_diag_ne = Fix_diag_nw = 0 (no 4-fold or diagonal symmetry), and Fix_flip_h = Fix_flip_v (conjugacy). So only 3 non-trivial Burnside components: Fix_id (= total), Fix_rot180, Fix_flip. Each is a candidate for its own recurrence or generating function. Verified by strong_check.ml up to n=8.
