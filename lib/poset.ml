@@ -266,23 +266,26 @@ let orient_edge rects (a, b) =
 
 (* Build a DAG from oriented adjacency edges.
    Returns (successors, in_degrees, tile_list) as IntMaps. *)
-let build_dag (g : Geom.t) =
-  let tiles = List.map fst g.rects in
+let build_dag_from ~rects ~adjacency =
+  let tiles = List.map fst rects in
   let empty_succ =
     List.fold_left (fun m n -> IntMap.add n [] m) IntMap.empty tiles in
   let empty_indeg =
     List.fold_left (fun m n -> IntMap.add n 0 m) IntMap.empty tiles in
   let succ, indeg =
     List.fold_left (fun (s, d) edge ->
-      let lo, hi = orient_edge g.rects edge in
+      let lo, hi = orient_edge rects edge in
       let s' = IntMap.update lo (function
         | None -> Some [hi] | Some l -> Some (hi :: l)) s in
       let d' = IntMap.update hi (function
         | None -> Some 1 | Some k -> Some (k + 1)) d in
       (s', d')
-    ) (empty_succ, empty_indeg) g.adjacency
+    ) (empty_succ, empty_indeg) adjacency
   in
   (succ, indeg, tiles)
+
+let build_dag (g : Geom.t) =
+  build_dag_from ~rects:g.rects ~adjacency:g.adjacency
 
 (* Pick the element with lowest priority value from a non-empty list.
    Returns (best, remaining).  O(n). *)
@@ -328,23 +331,23 @@ let to_rank_map lst =
   in
   m
 
-(* Compute the two-order encoding of P_a from a geometric layout. *)
-let of_geom (g : Geom.t) =
-  let n = List.length g.rects in
+(* Compute the two-order encoding from explicit rects and adjacency edges. *)
+let of_adjacency ~rects ~adjacency =
+  let n = List.length rects in
   if n <= 1 then
-    let order = match g.rects with
+    let order = match rects with
       | [(id, _)] -> IntMap.singleton id 0
       | _ -> IntMap.empty
     in
     { order1 = order; order2 = order; n }
   else
-    let succ, indeg, tiles = build_dag g in
+    let succ, indeg, tiles = build_dag_from ~rects ~adjacency in
     let priority_lr id =
-      let r = List.assoc id g.rects in
+      let r = List.assoc id rects in
       r.Geom.x +. r.Geom.w /. 2.
     in
     let priority_bt id =
-      let r = List.assoc id g.rects in
+      let r = List.assoc id rects in
       -. (r.Geom.y +. r.Geom.h /. 2.)
     in
     let order1_list = topo_sort succ indeg priority_lr tiles in
@@ -352,6 +355,10 @@ let of_geom (g : Geom.t) =
     { order1 = to_rank_map order1_list;
       order2 = to_rank_map order2_list;
       n }
+
+(* Compute the two-order encoding of P_a from a geometric layout. *)
+let of_geom (g : Geom.t) =
+  of_adjacency ~rects:g.rects ~adjacency:g.adjacency
 
 (* Compare two tiles in the poset.
    Returns Some (-1) if a < b, Some 1 if b < a, Some 0 if a = b,

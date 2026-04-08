@@ -16,6 +16,7 @@ dune exec bin/tiling_test.exe -- --output svg    # Schroder tiling enumeration +
 dune exec bin/model_check.exe -- --policy dominance --max-leaves 6
 dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
 dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
+dune exec bin/strong_check.exe -- --max-leaves 8 # strong guillotine counting + D4 orbits
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 
@@ -28,7 +29,7 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
-- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. Layer 1: `split`, `close`, `neighbor` (tree-based navigation). Layer 2: `simple_dissolve`, `simple_create`, `pivot_out`, `pivot_in`, `wall_slide` (the 3 atomic flip types generating the quotientope flip graph); `enumerate_flips` (all applicable flips); `flip_to_string`. Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
+- `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. Layer 1: `split`, `close`, `neighbor` (tree-based navigation). Layer 2: `simple_dissolve`, `simple_create`, `pivot_out`, `pivot_in`, `wall_slide` (the 3 atomic flip types generating the quotientope flip graph); `enumerate_flips` (all applicable flips); `flip_to_string`. Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Cross junction enumeration: `cross_junction_tiles` (4-tile IDs per junction), `diagonal_pairs` (NW-SE / NE-SW classification), `enumerate_strong_adjacencies` (all 2^k edge sets). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
 - `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`.
 - `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t, edges colored by `cut_depth`). Legacy `render_group`/`render`/`render_interactive` for binary Term.t (marked TODO).
 - `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_shrot_N.svg` (one representative per D4 orbit with tree + adjacency graph), `svg/operations.svg`. Supports `--max-svg N` to skip SVG for large N.
@@ -36,10 +37,11 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `bin/topology_check.ml` — Verification that D4 orbits have isomorphic adjacency graphs.
 - `bin/conjecture_check.ml` — Efficient single-pass verification via fingerprinting.
 - `bin/cross_check.ml` — Verifies corner-counting and cut-intersection degenerate detection agree.
-- `lib/poset.ml` — Adjacency poset as a 2-dimensional lattice (Asinowski et al. 2024, Prop. 9). `Poset.t` holds two rank maps (linear extensions of P_a) whose intersection is the partial order. `of_geom`, `compare`, `is_covering`, `coverings`, `minimum`, `maximum`. Poset direction: `a < b` means a is left-of or below b.
+- `lib/poset.ml` — Adjacency poset as a 2-dimensional lattice (Asinowski et al. 2024, Prop. 9). `Poset.t` holds two rank maps (linear extensions of P_a) whose intersection is the partial order. `of_adjacency` (from explicit rects + edges), `of_geom` (from `Geom.t`), `compare`, `is_covering`, `coverings`, `minimum`, `maximum`. Poset direction: `a < b` means a is left-of or below b.
 - `bin/poset_check.ml` — Verifies poset encoding: (A) every geometric edge is comparable, (B) every covering is a geometric edge, (C) antisymmetry, (D) extrema exist. Verified up to n=8 (10,879 tilings).
 - `bin/flip_test.ml` — SVG visualization of all 5 flip operations on example tilings. Generates `svg/flips.svg`.
 - `bin/flip_check.ml` — Model checker for flip properties: (A) size preservation, (B) validity, (C) invertibility, (D) connectivity. Verified A/B/D up to n=7 (1806 tilings). C: ~40% directly invertible; the rest are multi-level pivots.
+- `bin/strong_check.ml` — Model checker for strong guillotine counting. Three methods cross-validated: (1) cross-junction Σ 2^k, (2) Σ multiplicity(T) via boundary-tile formula, (3) §5.3 recurrence. Also: non-generic strong guillotine counting via Delannoy numbers D(a,b) and full enumeration. D4-reduced counting for both generic and non-generic. Verified up to n=8 (8558 weak, 21434 generic strong / 2800 D4, 39638 non-generic strong / 5143 D4).
 
 ### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
@@ -115,11 +117,25 @@ D4-covariant structural bias: cuts are sorted by `(before_height - after_height)
 
 Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement < 1e-6 (typically ~31 iterations).
 
+**Limitation**: When a cut participates in multiple boundary groups (nested junctions), its targets from different groups are averaged. This can leave deeply nested junctions unresolved. `enumerate_strong_adjacencies` handles this gracefully: unresolved junctions (neither diagonal in geometric edges) are enumerated by adding each diagonal in turn.
+
+### Strong guillotine counting
+
+**Cross-junction resolutions** (Σ 2^k): Each weak guillotine tiling (Schroder tree) with k cross junctions (multiplicity-4 points under equal splits) yields 2^k adjacency variants — one per diagonal resolution. `cross_junction_tiles` identifies the 4 tiles at each point. `diagonal_pairs` classifies them into NW-SE and NE-SW diagonals. `enumerate_strong_adjacencies` generates all 2^k edge sets by toggling diagonals. This is a strict subset of strong guillotine rectangulations: it captures diagonal choices at cross junctions but not segment interleaving at T-junctions.
+
+**True strong guillotine count** (paper §5.3, independently verified): Independently verified by two methods: (A) `multiplicity(T)` = Π C(a_j + b_j, a_j) per boundary, where a_j, b_j = number of perpendicular segments terminating from each side (= `len(boundary_tiles_ordered) - 1`, including nested segments that transitively reach the boundary); (B) the paper's 5-variable recurrence S(n, ℓ, t, r, b). Both agree: 1, 2, 6, 24, 114, 606, 3494, 21434. Full enumeration of all strong classes per tree via `enumerate_all_strong_adjacencies` (interleaving of cuts along each boundary) enables D4-reduced counting: 1, 1, 2, 6, 20, 93, 474, 2800.
+
+**Non-generic strong guillotine count**: Replacing C(a+b, a) with the Delannoy number D(a,b) = Σ_k C(a,k)C(b,k)2^k counts strong classes including 4-way junctions (the + pattern). D(a,b) counts lattice paths with steps (1,0), (0,1), (1,1) — the (1,1) step = two opposite-side segments coinciding. Verified: `multiplicity_nongeneric(T)` = Π D(a_j, b_j), with full enumeration via `enumerate_all_strong_adjacencies_nongeneric`. Sequence: 1, 2, 6, 26, 138, 834, 5542, 39638. D4-reduced: 1, 1, 2, 7, 24, 128, 744, 5143.
+
+Verified (strong_check.ml, n≤8): multiplicity = recurrence at every n, enumerate_all produces exactly multiplicity(T) distinct edge sets per tiling, cross-junction count ≤ generic multiplicity ≤ non-generic multiplicity. All edge sets distinct within each tiling for both generic and non-generic.
+
 ### References
 
 - Zeidler, Weber, Gavryushkin, Lutteroth. "Tiling Algebra for Constraint-based Layout Editing." J. Logical and Algebraic Methods in Programming, 2017. — Tabstops as shared constraint variables; adjacency = shared tabstop.
 - Eppstein, Mumford, Speckmann, Verbeek. "Area-Universal and Constrained Rectangular Layouts." SIAM J. Computing, 2012. — Area-universality iff one-sided; point contact excluded from adjacency; adjacency depends on split ratios in non-one-sided layouts.
-- Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees. Operad structure: split = composition, Schroder numbers count tilings.
+- Baez. "Guillotine Partitions and the Hipparchus Operad." Azimuth blog, 2022. — Bijection between guillotine partition types and Schroder trees. Operad structure: split = composition, Schroder numbers count tilings. See also: "The Hipparchus Operad." n-Category Café, 2013 (original naming; permutation-polynomial connection via Kontsevich; Vallette comment linking to Koszul duality in Loday-Vallette 2012). "Dividing a Square into Similar Rectangles." Azimuth, 2022 (speculative double-category remark: 2-cells = subdivided rectangles). Baez's treatment is combinatorial (counting, tree enumeration, operad identification) — he does not address flattening, flip graphs, quotientopes, or lattice congruences.
+- Loday, Vallette. *Algebraic Operads.* Springer, 2012. — Koszul duality for operads. The magmatic-infinity operad (= Hipparchus operad) is treated. Koszul dual may govern close-as-dual-to-split; not yet worked out for tilings.
+- Aguiar, Livernet. "The associative operad and the weak order on the symmetric groups." J. Homotopy Relat. Struct., 2007. — Operadic composition on symmetric group algebras = intervals of the weak order. Establishes the operad-to-lattice bridge for the associative operad (binary trees / Catalan). Whether this extends to the Hipparchus operad (Schroder trees / rectangulation quotientopes) is an open question.
 - Asinowski, Cardinal, Felsner, Fusy. "Combinatorics of rectangulations: Old and new bijections." 2024. — P_a is a planar 2-dimensional lattice (Prop. 9); strong poset, flip graph, permutation bijections, guillotine characterization via windmill avoidance.
 - Reading. "Generic rectangulations." Europ. J. Comb., 33(4):610-623, 2012. — Strong equivalence classes form a lattice congruence of the weak Bruhat order; 2-clumped permutations. Foundation for the flip graph lattice structure.
 - Pilaud, Santos. "Quotientopes." Bull. London Math. Soc., 51(3):406-420, 2019. — Any lattice congruence of the weak Bruhat order on S_n yields a polytope (quotientope) whose skeleton is the flip graph. Proves the rectangulation flip graph is polytopal.
@@ -168,6 +184,8 @@ Three layers of algebraic structure govern tiling operations, each with its own 
 **Reference**: Baez 2022 (Hipparchus operad); Schroder numbers count tilings.
 
 Split and close change the number of tiles. They are maps between quotientopes at different n. In operad language, split is composition: given a tiling of size n, replace a tile with a 2-tile sub-tiling to get a tiling of size n+1. Close is the partial inverse. Whether these maps are lattice morphisms (preserving the quotientope structure at each level) is an open question.
+
+**Flattening quotient.** The Hipparchus operad is the *free* operad on one operation per arity ≥ 2. Schrot's no-same-type-nesting constraint (H(a, H(b,c)) = H(a,b,c)) is a quotient of this free operad: same-orientation compositions are identified with higher-arity operations. The split code implements this directly — same-orientation splits insert siblings into the existing frame rather than nesting a new sub-frame. Baez does not discuss this quotient; it is specific to oriented (H/V) guillotine partitions.
 
 In the codebase: `Tiling.split` and `Tiling.close` implement these directly on Schroder trees.
 
@@ -246,6 +264,8 @@ The mathematical semantics: grow is a Layer 3 operation parameterized by a Layer
 - Three-level verification: visual SVG → model checking → Rocq proof
 - D4 orbit reduction of the paper's counting sequences (see below)
 - Proof obligations for Rocq: tiebreaker correctness (poset.ml), lattice morphism of split/close (open question)
+- **Operad-lattice bridge**: Aguiar-Livernet (2007) proves that operadic composition = weak order intervals for the *associative* operad (binary trees). Extending this to the Hipparchus operad would connect Layer 1 (split/close) to Layer 2 (quotientope lattice) algebraically. Related: Koszul duality of the Hipparchus operad (Loday-Vallette 2012) may give a formal dual relationship between split and close.
+- **Double-category semantics**: Baez's speculative remark (Azimuth, Dec 2022) that guillotine partitions form a double category (2-cells = subdivided rectangles) could provide a compositional semantics for tiling operations across layers. Undeveloped.
 
 ### D4 reduction of counting sequences
 
@@ -255,8 +275,10 @@ The paper (Asinowski et al. 2024) introduces several new counting sequences. Eac
 
 | Family | Sequence | OEIS | D4 reduction |
 |---|---|---|---|
-| Weak guillotine (Schroder) | 1, 2, 6, 22, 90, 394, ... | A006318 | 1, 1, 2, 6, 18, 68, ... (computed, not in OEIS) |
-| Strong guillotine | 1, 2, 6, 24, 114, 606, ... | none | not yet computed |
+| Weak guillotine (Schroder) | 1, 2, 6, 22, 90, 394, 1806, 8558, ... | A006318 | 1, 1, 2, 6, 18, 68, 270, 1195, ... (computed, not in OEIS) |
+| Strong guillotine | 1, 2, 6, 24, 114, 606, 3494, 21434, ... | A375913 (verified n≤8 by multiplicity + recurrence) | 1, 1, 2, 6, 20, 93, 474, 2800, ... (verified n≤8, not in OEIS) |
+| Cross-junction resolutions | 1, 2, 6, 24, 106, 514, 2610, 13810, ... | none (verified n≤8) | 1, 1, 2, 6, 19, 81, 368, 1903, ... (verified n≤8) |
+| Non-generic strong guillotine | 1, 2, 6, 26, 138, 834, 5542, 39638, ... | none (verified n≤8) | 1, 1, 2, 7, 24, 128, 744, 5143, ... (verified n≤8, not in OEIS) |
 | All strong rectangulations | 1, 2, 6, 24, 116, 642, ... | A342141 | not yet computed |
 | One-sided rectangulations | 1, 2, 6, 20, 72, 274, ... | A348351 | not yet computed |
 

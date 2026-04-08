@@ -477,6 +477,11 @@ module RPointMap = Map.Make(struct
   let compare = compare_rpoint
 end)
 
+module EdgeSet = Set.Make(struct
+  type t = int * int
+  let compare = compare
+end)
+
 let rat_is_interior num den = num > 0 && num < den
 
 let normalize_rpoint p =
@@ -601,6 +606,46 @@ let degenerate_cuts tiling =
   ) h_cuts;
   List.sort_uniq compare_rpoint !points
 
+(* Cross junction tiles: for each degenerate point of multiplicity 4,
+   return the point and the 4 tile IDs whose closures contain it.
+   Same logic as degenerate_corners but collecting tile IDs. *)
+let cross_junction_tiles tiling =
+  let tiles = leaves tiling in
+  let tile_ivs = List.map (fun n ->
+    let iv_h = tile_interval ~axis:H n tiling in
+    let iv_v = tile_interval ~axis:V n tiling in
+    (n, iv_h, iv_v)
+  ) tiles in
+  (* Candidate interior points from tile corners *)
+  let candidates = ref RPointMap.empty in
+  List.iter (fun (_, iv_h, iv_v) ->
+    let xs = [(iv_v.num, iv_v.den); (iv_v.num + 1, iv_v.den)] in
+    let ys = [(iv_h.num, iv_h.den); (iv_h.num + 1, iv_h.den)] in
+    List.iter (fun (xn, xd) ->
+      List.iter (fun (yn, yd) ->
+        if rat_is_interior xn xd && rat_is_interior yn yd then
+          let p = { px = xn; pd = xd; qx = yn; qd = yd } in
+          candidates := RPointMap.add p () !candidates
+      ) ys
+    ) xs
+  ) tile_ivs;
+  RPointMap.fold (fun pt () acc ->
+    let touching = List.fold_left (fun ids (n, iv_h, iv_v) ->
+      let x_in = rat_in_closed (pt.px, pt.pd)
+        (iv_v.num, iv_v.num + 1, iv_v.den) in
+      let y_in = rat_in_closed (pt.qx, pt.qd)
+        (iv_h.num, iv_h.num + 1, iv_h.den) in
+      if x_in && y_in then n :: ids else ids
+    ) [] tile_ivs in
+    if List.length touching = 4 then
+      (pt, List.sort compare touching) :: acc
+    else acc
+  ) !candidates []
+  |> List.sort (fun (a, _) (b, _) -> compare_rpoint a b)
+
+let count_cross_junctions tiling =
+  List.length (cross_junction_tiles tiling)
+
 (* Depth of the lowest common ancestor of two tiles in the tree.
    This is the length of the common path prefix from root to each tile. *)
 let cut_depth a b tiling =
@@ -711,6 +756,362 @@ let tabstop_all_adjacencies tiling =
     ) tiles
   ) tiles;
   List.sort compare !edges
+
+(* --- Strong guillotine multiplicity --- *)
+
+let binom n k =
+  if k < 0 || k > n then 0
+  else
+    let k = min k (n - k) in
+    let rec go i acc =
+      if i > k then acc
+      else go (i + 1) (acc * (n - k + i) / i)
+    in
+    go 1 1
+
+(* Delannoy number D(a,b) = number of lattice paths (0,0)->(a,b)
+   using steps (1,0), (0,1), (1,1).
+   D(a,b) = Σ_k C(a,k) C(b,k) 2^k.
+   Counts non-generic interleavings (allowing coincident positions). *)
+let delannoy a b =
+  let rec go k acc =
+    if k > min a b then acc
+    else go (k + 1) (acc + binom a k * binom b k * (1 lsl k))
+  in
+  go 0 0
+
+type border = Top | Bottom | Left | Right
+
+(* Number of perpendicular cuts terminating at a node from a given side.
+   In a Schroder tree, children alternate orientation, so a child of an
+   H-frame is either Tile (0 cuts) or V-frame (arity-1 cuts). *)
+let perp_cuts = function
+  | Schrot.Tile _ -> 0
+  | Schrot.Frame children -> List2.length children - 1
+
+(* Ordered list of tile IDs touching a given border of a node's region. *)
+let rec boundary_tiles_ordered is_h bdr = function
+  | Schrot.Tile n -> [n]
+  | Schrot.Frame children ->
+    let ch = List2.to_list children in
+    let k = List.length ch in
+    if is_h then
+      (match bdr with
+      | Top -> boundary_tiles_ordered (not is_h) Top (List.hd ch)
+      | Bottom -> boundary_tiles_ordered (not is_h) Bottom (List.nth ch (k - 1))
+      | Left -> List.concat_map (boundary_tiles_ordered (not is_h) Left) ch
+      | Right -> List.concat_map (boundary_tiles_ordered (not is_h) Right) ch)
+    else
+      (match bdr with
+      | Left -> boundary_tiles_ordered (not is_h) Left (List.hd ch)
+      | Right -> boundary_tiles_ordered (not is_h) Right (List.nth ch (k - 1))
+      | Top -> List.concat_map (boundary_tiles_ordered (not is_h) Top) ch
+      | Bottom -> List.concat_map (boundary_tiles_ordered (not is_h) Bottom) ch)
+
+(* Multiplicity of a weak guillotine tiling = product over all internal
+   boundaries of C(a+b, a), where a,b = number of perpendicular segments
+   terminating at the boundary from each side.  Perpendicular segments
+   include those from nested levels that transitively reach the boundary.
+   Count = len(boundary_tiles_ordered(child, facing_side)) - 1.
+   (Asinowski et al. 2024, §5.3). *)
+let multiplicity tiling =
+  let rec go is_h = function
+    | Schrot.Tile _ -> 1
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      let child_prod = List.fold_left (fun acc c ->
+        acc * go (not is_h) c) 1 ch in
+      let boundary_prod = ref 1 in
+      let rec pairs = function
+        | [] | [_] -> ()
+        | c_i :: ((c_next :: _) as rest) ->
+          let a, b =
+            if is_h then
+              (List.length (boundary_tiles_ordered (not is_h) Bottom c_i) - 1,
+               List.length (boundary_tiles_ordered (not is_h) Top c_next) - 1)
+            else
+              (List.length (boundary_tiles_ordered (not is_h) Right c_i) - 1,
+               List.length (boundary_tiles_ordered (not is_h) Left c_next) - 1)
+          in
+          boundary_prod := !boundary_prod * binom (a + b) a;
+          pairs rest
+      in
+      pairs ch;
+      child_prod * !boundary_prod
+  in
+  go (is_h tiling) (tree tiling)
+
+(* Non-generic multiplicity: same structure but uses Delannoy numbers
+   D(a,b) instead of C(a+b, a).  Counts strong classes including those
+   where perpendicular segments coincide (4-way junctions allowed). *)
+let multiplicity_nongeneric tiling =
+  let rec go is_h = function
+    | Schrot.Tile _ -> 1
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      let child_prod = List.fold_left (fun acc c ->
+        acc * go (not is_h) c) 1 ch in
+      let boundary_prod = ref 1 in
+      let rec pairs = function
+        | [] | [_] -> ()
+        | c_i :: ((c_next :: _) as rest) ->
+          let a, b =
+            if is_h then
+              (List.length (boundary_tiles_ordered (not is_h) Bottom c_i) - 1,
+               List.length (boundary_tiles_ordered (not is_h) Top c_next) - 1)
+            else
+              (List.length (boundary_tiles_ordered (not is_h) Right c_i) - 1,
+               List.length (boundary_tiles_ordered (not is_h) Left c_next) - 1)
+          in
+          boundary_prod := !boundary_prod * delannoy a b;
+          pairs rest
+      in
+      pairs ch;
+      child_prod * !boundary_prod
+  in
+  go (is_h tiling) (tree tiling)
+
+(* Non-generic interleaving enumeration.  Like enumerate_interleavings
+   but also generates merges with coincident positions (1,1)-steps.
+   A merge step is: `T (advance top), `B (advance bot), `C (both).
+   When two cuts coincide, the facing tiles from BOTH sides change
+   simultaneously — the 4 tiles at the junction share a single point. *)
+let enumerate_interleavings_nongeneric top_tiles bot_tiles =
+  let a = List.length top_tiles - 1 in
+  let b = List.length bot_tiles - 1 in
+  let top_arr = Array.of_list top_tiles in
+  let bot_arr = Array.of_list bot_tiles in
+  let mk x y = if x < y then (x, y) else (y, x) in
+  let rec gen_merges n_t n_b =
+    if n_t = 0 && n_b = 0 then [[]]
+    else
+      let take_t = if n_t > 0 then
+        List.map (fun m -> `T :: m) (gen_merges (n_t - 1) n_b)
+      else [] in
+      let take_b = if n_b > 0 then
+        List.map (fun m -> `B :: m) (gen_merges n_t (n_b - 1))
+      else [] in
+      let take_c = if n_t > 0 && n_b > 0 then
+        List.map (fun m -> `C :: m) (gen_merges (n_t - 1) (n_b - 1))
+      else [] in
+      take_t @ take_b @ take_c
+  in
+  let edges_of_merge merge =
+    let edges = ref [] in
+    let ti = ref 0 and bi = ref 0 in
+    edges := mk top_arr.(!ti) bot_arr.(!bi) :: !edges;
+    List.iter (fun step ->
+      (match step with
+       | `T -> incr ti
+       | `B -> incr bi
+       | `C -> incr ti; incr bi);
+      edges := mk top_arr.(!ti) bot_arr.(!bi) :: !edges
+    ) merge;
+    List.sort_uniq compare !edges
+  in
+  List.map edges_of_merge (gen_merges a b)
+
+(* Enumerate all non-generic strong classes of a tiling. *)
+let enumerate_all_strong_adjacencies_nongeneric tiling =
+  let boundaries = ref [] in
+  let rec collect is_h = function
+    | Schrot.Tile _ -> ()
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      List.iter (collect (not is_h)) ch;
+      let rec pairs = function
+        | [] | [_] -> ()
+        | c_i :: ((c_next :: _) as rest) ->
+          let top_tiles, bot_tiles =
+            if is_h then
+              (boundary_tiles_ordered (not is_h) Bottom c_i,
+               boundary_tiles_ordered (not is_h) Top c_next)
+            else
+              (boundary_tiles_ordered (not is_h) Right c_i,
+               boundary_tiles_ordered (not is_h) Left c_next)
+          in
+          boundaries := (top_tiles, bot_tiles) :: !boundaries;
+          pairs rest
+      in
+      pairs ch
+  in
+  collect (is_h tiling) (tree tiling);
+  let all_boundaries = !boundaries in
+  let all_interleavings = List.map (fun (top_tiles, bot_tiles) ->
+    enumerate_interleavings_nongeneric top_tiles bot_tiles
+  ) all_boundaries in
+  let rec cartesian = function
+    | [] -> [EdgeSet.empty]
+    | choices :: rest ->
+      let rest_products = cartesian rest in
+      List.concat_map (fun edge_list ->
+        let edge_set = List.fold_left (fun s e ->
+          EdgeSet.add e s) EdgeSet.empty edge_list in
+        List.map (fun rp -> EdgeSet.union edge_set rp) rest_products
+      ) choices
+  in
+  let all_sets = cartesian all_interleavings in
+  List.map EdgeSet.elements all_sets
+
+(* Enumerate all C(a+b, a) interleavings of a top-cuts and b bot-cuts
+   along a boundary.  [top_tiles] has a+1 tiles, [bot_tiles] has b+1.
+   Each interleaving merges the a+b cuts into a sequence; in each
+   resulting interval, the facing top-tile and bot-tile are adjacent.
+   Returns a list of (adjacency edge list), one per interleaving. *)
+let enumerate_interleavings top_tiles bot_tiles =
+  let a = List.length top_tiles - 1 in
+  let b = List.length bot_tiles - 1 in
+  let top_arr = Array.of_list top_tiles in
+  let bot_arr = Array.of_list bot_tiles in
+  let mk x y = if x < y then (x, y) else (y, x) in
+  let rec gen_merges n_t n_b =
+    if n_t = 0 && n_b = 0 then [[]]
+    else
+      let take_t = if n_t > 0 then
+        List.map (fun m -> true :: m) (gen_merges (n_t - 1) n_b)
+      else [] in
+      let take_b = if n_b > 0 then
+        List.map (fun m -> false :: m) (gen_merges n_t (n_b - 1))
+      else [] in
+      take_t @ take_b
+  in
+  let edges_of_merge merge =
+    let edges = ref [] in
+    let ti = ref 0 and bi = ref 0 in
+    edges := mk top_arr.(!ti) bot_arr.(!bi) :: !edges;
+    List.iter (fun is_top_cut ->
+      if is_top_cut then incr ti else incr bi;
+      edges := mk top_arr.(!ti) bot_arr.(!bi) :: !edges
+    ) merge;
+    List.sort_uniq compare !edges
+  in
+  List.map edges_of_merge (gen_merges a b)
+
+(* Enumerate ALL strong equivalence classes of a tiling by generating
+   all interleaving choices at every internal boundary.  Returns a list
+   of adjacency edge sets. *)
+let enumerate_all_strong_adjacencies tiling =
+  let boundaries = ref [] in
+  let rec collect is_h = function
+    | Schrot.Tile _ -> ()
+    | Schrot.Frame children ->
+      let ch = List2.to_list children in
+      List.iter (collect (not is_h)) ch;
+      let rec pairs = function
+        | [] | [_] -> ()
+        | c_i :: ((c_next :: _) as rest) ->
+          let top_tiles, bot_tiles =
+            if is_h then
+              (boundary_tiles_ordered (not is_h) Bottom c_i,
+               boundary_tiles_ordered (not is_h) Top c_next)
+            else
+              (boundary_tiles_ordered (not is_h) Right c_i,
+               boundary_tiles_ordered (not is_h) Left c_next)
+          in
+          boundaries := (top_tiles, bot_tiles) :: !boundaries;
+          pairs rest
+      in
+      pairs ch
+  in
+  collect (is_h tiling) (tree tiling);
+  let all_boundaries = !boundaries in
+  let all_interleavings = List.map (fun (top_tiles, bot_tiles) ->
+    enumerate_interleavings top_tiles bot_tiles
+  ) all_boundaries in
+  let rec cartesian = function
+    | [] -> [EdgeSet.empty]
+    | choices :: rest ->
+      let rest_products = cartesian rest in
+      List.concat_map (fun edge_list ->
+        let edge_set = List.fold_left (fun s e ->
+          EdgeSet.add e s) EdgeSet.empty edge_list in
+        List.map (fun rp -> EdgeSet.union edge_set rp) rest_products
+      ) choices
+  in
+  let all_sets = cartesian all_interleavings in
+  List.map EdgeSet.elements all_sets
+
+(* --- Cross junction diagonal pairs --- *)
+
+(* For each cross junction, identify the two diagonal tile pairs.
+   At point P = (px/pd, qx/qd), classify each of the 4 tiles by
+   which corner touches P:
+     NW: P at tile's SE corner (x_right = px, y_bottom = qx)
+     NE: P at tile's SW corner (x_left = px, y_bottom = qx)
+     SW: P at tile's NE corner (x_right = px, y_top = qx)
+     SE: P at tile's NW corner (x_left = px, y_top = qx)
+   Diagonals: (NW, SE) and (NE, SW). *)
+let diagonal_pairs tiling =
+  let junctions = cross_junction_tiles tiling in
+  List.map (fun (pt, tile_ids) ->
+    let nw = ref (-1) and ne = ref (-1)
+    and sw = ref (-1) and se = ref (-1) in
+    List.iter (fun n ->
+      let iv_h = tile_interval ~axis:H n tiling in
+      let iv_v = tile_interval ~axis:V n tiling in
+      (* x_left = iv_v.num/iv_v.den, x_right = (iv_v.num+1)/iv_v.den *)
+      (* y_top = iv_h.num/iv_h.den, y_bottom = (iv_h.num+1)/iv_h.den *)
+      let x_at_left = compare_rat (iv_v.num, iv_v.den) (pt.px, pt.pd) = 0 in
+      let x_at_right = compare_rat (iv_v.num + 1, iv_v.den) (pt.px, pt.pd) = 0 in
+      let y_at_top = compare_rat (iv_h.num, iv_h.den) (pt.qx, pt.qd) = 0 in
+      let y_at_bottom = compare_rat (iv_h.num + 1, iv_h.den) (pt.qx, pt.qd) = 0 in
+      match x_at_left, x_at_right, y_at_top, y_at_bottom with
+      | _, true, _, true -> nw := n   (* P at SE corner *)
+      | true, _, _, true -> ne := n   (* P at SW corner *)
+      | _, true, true, _ -> sw := n   (* P at NE corner *)
+      | true, _, true, _ -> se := n   (* P at NW corner *)
+      | _ -> failwith (Printf.sprintf
+          "diagonal_pairs: tile %d has no corner at junction" n)
+    ) tile_ids;
+    let mk a b = if a < b then (a, b) else (b, a) in
+    (mk !nw !se, mk !ne !sw)
+  ) junctions
+
+(* Enumerate all 2^k strong adjacency edge sets for a tiling with k
+   cross junctions.  [geo_edges] is the default geometric adjacency
+   (from Geom.edges).  For k=0, returns [geo_edges] unchanged.
+
+   At each cross junction, one of three cases:
+   - d1 in geo, d2 not: resolved, d1 is the default diagonal
+   - d2 in geo, d1 not: resolved, d2 is the default diagonal
+   - neither in geo: unresolved (nested junction, resolve_splits averaged
+     targets); treat as needing both choices added to the base set *)
+let enumerate_strong_adjacencies ~geo_edges tiling =
+  let diags = diagonal_pairs tiling in
+  let k = List.length diags in
+  if k = 0 then
+    [geo_edges]
+  else
+    let geo_set = List.fold_left (fun s e -> EdgeSet.add e s)
+      EdgeSet.empty geo_edges in
+    (* Classify each junction: Resolved(chosen, unchosen) | Unresolved(d1, d2) *)
+    let classified = List.map (fun (d1, d2) ->
+      let d1_in = EdgeSet.mem d1 geo_set in
+      let d2_in = EdgeSet.mem d2 geo_set in
+      match d1_in, d2_in with
+      | true, false -> `Resolved (d1, d2)
+      | false, true -> `Resolved (d2, d1)
+      | false, false -> `Unresolved (d1, d2)
+      | true, true -> `Both_present (d1, d2)
+    ) diags in
+    let n_choices = 1 lsl k in
+    List.init n_choices (fun mask ->
+      let edges = List.fold_left (fun s (i, cls) ->
+        match cls with
+        | `Resolved (chosen, unchosen) ->
+          if mask land (1 lsl i) = 0 then s
+          else s |> EdgeSet.remove chosen |> EdgeSet.add unchosen
+        | `Unresolved (d1, d2) ->
+          (* Neither present: add one or the other *)
+          if mask land (1 lsl i) = 0 then EdgeSet.add d1 s
+          else EdgeSet.add d2 s
+        | `Both_present (d1, _d2) ->
+          (* Both already present (shouldn't happen normally) *)
+          if mask land (1 lsl i) = 0 then s
+          else EdgeSet.remove d1 s
+      ) geo_set (List.mapi (fun i x -> (i, x)) classified) in
+      EdgeSet.elements edges
+    )
 
 (* --- D4 symmetry group --- *)
 
