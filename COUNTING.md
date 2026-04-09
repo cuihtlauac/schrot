@@ -67,7 +67,7 @@ Burnside component sequences (n = 1..8):
 
 | Variant | Fix_rot180 | Fix_flip |
 |---|---|---|
-| Weak | 1, 2, 2, 6, 6, 22, 22, 90 | 1, 2, 4, 10, 24, 64, 166, 456 |
+| Weak | 1, 2, 2, 6, 6, 22, 22, 90, 90, 394, 394, 1806 | 1, 2, 4, 10, 24, 64, 166, 456, 1234, 3454, 9600, 27246 |
 | Generic strong | 1, 2, 2, 8, 6, 38, 26, 210 | 1, 2, 4, 8, 20, 50, 136, 378 |
 | Non-generic strong | 1, 2, 2, 10, 6, 54, 30, 346 | 1, 2, 4, 10, 24, 68, 190, 580 |
 
@@ -77,26 +77,22 @@ Burnside component sequences (n = 1..8):
 
 Sparse bottom-up recurrence (`guillotine_recurrence_sparse`) tracks only non-zero entries, indexed by (n, ℓ) for left-part lookup and (n, r) for right-part lookup. Extends both generic and non-generic sequences to n = 20 in seconds. Cross-validated against the dense recurrence for n ≤ 8.
 
-### 2. Constrained generating functions for weak Burnside components
+### 2. Constrained generating functions for weak Burnside components (partially done)
 
-The weak guillotine generating function is algebraic:
+The weak guillotine GF is algebraic: G(y) = (1 − y − √(1 − 6y + y²)) / 2.
 
-  G(x) = (1 − x − √(1 − 6x + x²)) / (2(2 − x))
+**Fix_rot180 — SOLVED**: Fix_rot180(n) = S(⌊n/2⌋ + 1) where S(k) is the k-th large Schroder number. Verified against enumeration for n ≤ 12. This requires no generating function — the palindromic constraint reduces counting to Schroder numbers at half the size.
 
-satisfying V(x) = (x + H(x))·G(x) with H = V = (G − x)/2. For each D4 element g, define F_g(x) = generating function for g-fixed tilings.
-
-**Fix_rot180**: a rot180-fixed Schroder tree has palindromic child lists at every node. For even arity 2k: children are (c₁, …, cₖ, cₖ, …, c₁). For odd arity 2k+1: (c₁, …, cₖ, c_mid, cₖ, …, c₁). This constrains the tree recursion to a system of algebraic equations:
+**Fix_flip — functional equation derived, not yet numerically solved**: flip_h reverses children at H-nodes only. A flip_h-fixed tree has conjugate-palindromic children at H-nodes (child i paired with flip_h(child_{k+1-i})) and individually fixed children at V-nodes. The functional equation is:
 
 ```
-G₁₈₀(x) = x + 2·V₁₈₀(x)
-V₁₈₀(x) = palindromic-V-trees composed with G₁₈₀
+f_V(y) = y + f_H(y)² / (1 − f_H(y))
+f_H(y) = y + g_V(y²) · (1 + f_V(y)) / (1 − g_V(y²))
 ```
 
-The palindromic constraint means the generating function counts trees where each node's children form a palindrome. The even-arity contribution is Σ_{k≥1} V₁₈₀(x)^k (pair each half), the odd-arity adds a central child. This should yield a solvable algebraic system.
+where g_V(y) = (G(y) − y)/2 is the GF for all V-type Schroder trees (known). The g_V(y²) term reflects that palindrome halves at H-nodes use arbitrary V-trees (partner = flip conjugate, not equal). The system involves y² substitution, making it a functional equation (not purely algebraic). Iterative solution in PARI/GP is in progress; needs debugging of the coefficient-level iteration.
 
-**Fix_flip_h**: a flip_h-fixed tree has palindromic children at H-nodes (top↔bottom reversal) but unconstrained V-nodes. This gives a mixed system: H-trees are palindromic, V-trees are free.
-
-Both systems are tractable in computer algebra (Sage, Maple). The computed Burnside component sequences provide target values for validation.
+With Fix_rot180 exact and 12 enumerated terms of Fix_flip, the D4-reduced weak guillotine count is: D4(n) = (S(n) + S(⌊n/2⌋+1) + 2·flip(n)) / 8.
 
 ### 3. Constrained §5.3 recurrence for strong Burnside components
 
