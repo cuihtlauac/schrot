@@ -94,16 +94,11 @@ where g_V(y) = (G(y) − y)/2 is the GF for all V-type Schroder trees (known). T
 
 With Fix_rot180 exact and 12 enumerated terms of Fix_flip, the D4-reduced weak guillotine count is: D4(n) = (S(n) + S(⌊n/2⌋+1) + 2·flip(n)) / 8.
 
-### 3. Constrained §5.3 recurrence for strong Burnside components
+### 3. Strong Burnside components
 
-Adapt the 5-variable recurrence to count only g-fixed strong rectangulations by imposing boundary parameter constraints:
+**Attempted and abandoned**: multiplicity-based Burnside (counting structurally invariant interleavings per g-fixed tree). This fails because the symmetry permutes tile labels, changing which adjacency the "same" interleaving string produces. Example: at h(v(0,1),v(2,3)), flip_h maps the NW-SE diagonal to NE-SW — neither is individually fixed — but the interleaving strings "AB" and "BA" are both reverse-swap invariant.
 
-| g | Constraint on (ℓ, t, r, b) |
-|---|---|
-| rot180 | (ℓ, t, r, b) = (r, b, ℓ, t) |
-| flip_h | (ℓ, t, r, b) = (ℓ, b, r, t) |
-
-These constraints reduce the summation space, potentially giving tractable recurrences for Fix_rot180 and Fix_flip of the strong and non-generic variants.
+**Still open**: constrained §5.3 recurrence with boundary symmetry (ℓ=r,t=b for rot180; t=b for flip_h). This would need to track not just boundary parameters but also internal decomposition compatibility with the symmetry — a much harder recurrence. The strong Burnside data from full enumeration (n ≤ 8) remains the best available.
 
 ### 4. Recurrence guessing from extended sequences
 
