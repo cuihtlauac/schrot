@@ -117,6 +117,145 @@ let strong_guillotine_recurrence =
 let nongeneric_recurrence =
   guillotine_recurrence ~weight:Tiling.delannoy
 
+(* Sparse bottom-up recurrence.  Stores only non-zero entries, indexed
+   for fast convolution.  Much faster for large n. *)
+let guillotine_recurrence_sparse ~weight max_n =
+  (* sv_by_nl.(n) is a map: ℓ -> list of (t, r, b, value) for S_V *)
+  let sv_tbl : (int * int * int * int * int, int) Hashtbl.t =
+    Hashtbl.create 65536 in
+  let s_tbl : (int * int * int * int * int, int) Hashtbl.t =
+    Hashtbl.create 65536 in
+  (* S_V entries indexed by (n, ℓ) for left-part lookup *)
+  let sv_by_nl : (int * int, (int * int * int * int) list) Hashtbl.t =
+    Hashtbl.create 4096 in
+  (* S entries indexed by (n, r) for right-part lookup *)
+  let s_by_nr : (int * int, (int * int * int * int) list) Hashtbl.t =
+    Hashtbl.create 4096 in
+  let add_sv n l t r b v =
+    if v > 0 then begin
+      Hashtbl.replace sv_tbl (n, l, t, r, b) v;
+      let key = (n, l) in
+      let prev = try Hashtbl.find sv_by_nl key with Not_found -> [] in
+      Hashtbl.replace sv_by_nl key ((t, r, b, v) :: prev)
+    end
+  in
+  let add_s n l t r b v =
+    if v > 0 then begin
+      Hashtbl.replace s_tbl (n, l, t, r, b) v;
+      let key = (n, r) in
+      let prev = try Hashtbl.find s_by_nr key with Not_found -> [] in
+      Hashtbl.replace s_by_nr key ((l, t, b, v) :: prev)
+    end
+  in
+  (* Base: S_V(1, 0, 0, 0, 0) = 1, S(1, 0, 0, 0, 0) = 1 *)
+  add_sv 1 0 0 0 0 1;
+  add_s 1 0 0 0 0 1;
+  let results = Array.make (max_n + 1) 0 in
+  results.(1) <- 1;
+  (* Build level by level *)
+  for n = 2 to max_n do
+    (* Compute S_V(n, ℓ, t, r, b) by convolving left-part (S_H) with right-part (S) *)
+    (* S_H(n', ℓ, t', r', b') = S_V(n', t', r', b', ℓ) — look up sv_by_nl with key (n', t')
+       and match the 4th component = ℓ *)
+    (* More efficient: iterate over all non-zero S_V entries for left part,
+       and all non-zero S entries for right part, accumulating results. *)
+    let sv_new : (int * int * int * int, int) Hashtbl.t = Hashtbl.create 1024 in
+    for n' = 1 to n - 1 do
+      let n_right = n - n' in
+      (* Left part: S_H(n', ℓ_target, t', r', b') = S_V(n', t', r', b', ℓ_target)
+         So we iterate S_V entries for size n': for each (t', r', b', ℓ_target, val),
+         the left part contributes S_H(n', ℓ_target, t', r', b') = val.
+         S_V is indexed by (n, l) in sv_by_nl. *)
+      (* Collect all S_V(n', l, t, r, b) entries for left part *)
+      let left_entries = ref [] in
+      for l_sv = 0 to n' - 1 do
+        match Hashtbl.find_opt sv_by_nl (n', l_sv) with
+        | None -> ()
+        | Some entries ->
+          List.iter (fun (t_sv, r_sv, b_sv, v_sv) ->
+            (* This is S_V(n', l_sv, t_sv, r_sv, b_sv) = v_sv
+               = S_H(n', b_sv, l_sv, t_sv, r_sv) [by S_H(n,l,t,r,b) = S_V(n,t,r,b,l)]
+               Wait, S_H(n, l, t, r, b) = S_V(n, t, r, b, l).
+               So S_V(n', l_sv, t_sv, r_sv, b_sv) = S_H(n', b_sv, l_sv, t_sv, r_sv)... no.
+               Let me re-derive: sh n l t r b = sv n t r b l.
+               So S_H(n', L, T, R, B) = S_V(n', T, R, B, L).
+               If I have S_V(n', l_sv, t_sv, r_sv, b_sv) = v, then this equals
+               S_H(n', b_sv, l_sv, t_sv, r_sv).
+               The left part in the formula is S_H(n', ℓ, t', r', b'), so:
+               ℓ = b_sv, t' = l_sv, r' = t_sv, b' = r_sv. *)
+            left_entries := (b_sv, l_sv, t_sv, r_sv, v_sv) :: !left_entries
+              (* (ℓ_target, t', r', b', value) *)
+          ) entries
+      done;
+      (* Also add size-1 left part: S_H(1, 0, 0, 0, 0) = S_V(1, 0, 0, 0, 0) = 1 *)
+      (* Already included if n'=1 and sv_by_nl has the entry. But S_V(1,0,0,0,0)
+         should be in the table... we didn't add it. Let me add it. *)
+      (* For right part: iterate S entries for size n_right, indexed by (n_right, r_target) *)
+      List.iter (fun (l_target, t', r', b', h_val) ->
+        (* Right part: S(n_right, ℓ', t-1-t', r_target, b-1-b')
+           The target S_V(n, l_target, t, r_target, b) gets:
+           t = 1 + t' + t_right, where t_right comes from right part
+           b = 1 + b' + b_right
+           r_target = r from right part
+           So we need S(n_right, ℓ', t_right, r_target, b_right) entries. *)
+        (* Iterate over all non-zero S entries for size n_right *)
+        for r_target = 0 to n_right - 1 do
+          match Hashtbl.find_opt s_by_nr (n_right, r_target) with
+          | None -> ()
+          | Some entries ->
+            List.iter (fun (l', t_right, b_right, s_val) ->
+              let t_out = 1 + t' + t_right in
+              let b_out = 1 + b' + b_right in
+              let w = weight r' l' in
+              let contrib = h_val * s_val * w in
+              if contrib > 0 then begin
+                let key = (l_target, t_out, r_target, b_out) in
+                let prev = try Hashtbl.find sv_new key with Not_found -> 0 in
+                Hashtbl.replace sv_new key (prev + contrib)
+              end
+            ) entries
+        done
+      ) !left_entries
+    done;
+    (* Store the new S_V entries and compute S = S_V + S_H *)
+    let total = ref 0 in
+    Hashtbl.iter (fun (l, t, r, b) v ->
+      add_sv n l t r b v;
+      (* S_H(n, l, t, r, b) = S_V(n, t, r, b, l) — already in sv_tbl *)
+      let sh_val = try Hashtbl.find sv_tbl (n, t, r, b, l) with Not_found -> 0 in
+      let s_val = v + sh_val in
+      (* But we also need S_H for states not covered by sv_new.
+         S_H(n, l, t, r, b) = S_V(n, t, r, b, l). We just added all S_V(n, ...)
+         entries, so sv_tbl has them. But we need to compute S for all (l,t,r,b)
+         where either S_V or S_H is non-zero. *)
+      ignore s_val
+    ) sv_new;
+    (* Compute S(n, l, t, r, b) = S_V(n, l, t, r, b) + S_H(n, l, t, r, b)
+       = S_V(n, l, t, r, b) + S_V(n, t, r, b, l) *)
+    let s_new : (int * int * int * int, int) Hashtbl.t = Hashtbl.create 1024 in
+    (* Collect all (l, t, r, b) where S_V(n, l, t, r, b) > 0 *)
+    Hashtbl.iter (fun (l, t, r, b) _ ->
+      if not (Hashtbl.mem s_new (l, t, r, b)) then
+        Hashtbl.replace s_new (l, t, r, b) 0;
+      (* Also (t, r, b, l) contributes via S_H *)
+      if not (Hashtbl.mem s_new (t, r, b, l)) then
+        Hashtbl.replace s_new (t, r, b, l) 0
+    ) sv_new;
+    Hashtbl.iter (fun (l, t, r, b) _ ->
+      let sv_val = try Hashtbl.find sv_tbl (n, l, t, r, b) with Not_found -> 0 in
+      let sh_val = try Hashtbl.find sv_tbl (n, t, r, b, l) with Not_found -> 0 in
+      let s_val = sv_val + sh_val in
+      if s_val > 0 then begin
+        add_s n l t r b s_val;
+        total := !total + s_val
+      end
+    ) s_new;
+    results.(n) <- !total;
+    Printf.printf "  n=%d: %d (sv_entries=%d, s_entries=%d)\n%!"
+      n !total (Hashtbl.length sv_new) (Hashtbl.length s_new)
+  done;
+  results
+
 let () =
   let max_leaves = ref 7 in
   Arg.parse [
@@ -127,7 +266,7 @@ let () =
     all_ok := false; Printf.printf "FAIL: %s\n%!" s) fmt in
   Printf.printf "Strong guillotine counting checker\n%!";
   Printf.printf "==================================\n%!";
-  let max_rec = max !max_leaves 10 in
+  let max_rec = !max_leaves in
   Printf.printf "Computing recurrences up to n=%d...\n%!" max_rec;
   let recurrence = strong_guillotine_recurrence max_rec in
   let ng_recurrence = nongeneric_recurrence max_rec in
@@ -257,14 +396,28 @@ let () =
     Printf.printf "  Burnside ng:     [%s]\n%!"
       (String.concat ", " (Array.to_list (Array.map string_of_int ng_fix)))
   done;
-  (* Extended sequences from recurrence only *)
-  Printf.printf "\nExtended sequences (recurrence only):\n%!";
-  Printf.printf "  generic:     ";
-  for n = 1 to max_rec do Printf.printf "%d%s" recurrence.(n)
-    (if n < max_rec then ", " else "\n%!") done;
-  Printf.printf "  non-generic: ";
-  for n = 1 to max_rec do Printf.printf "%d%s" ng_recurrence.(n)
-    (if n < max_rec then ", " else "\n%!") done;
+  (* Extended sequences via sparse recurrence *)
+  let max_ext = 20 in
+  Printf.printf "\nExtending via sparse recurrence to n=%d...\n%!" max_ext;
+  Printf.printf "Generic:\n%!";
+  let ext_gen = guillotine_recurrence_sparse
+    ~weight:(fun r' l' -> binom (r' + l') r') max_ext in
+  Printf.printf "Non-generic:\n%!";
+  let ext_ng = guillotine_recurrence_sparse
+    ~weight:Tiling.delannoy max_ext in
+  (* Cross-validate against dense recurrence for overlap *)
+  for n = 1 to max_rec do
+    if ext_gen.(n) <> recurrence.(n) then
+      fail "sparse generic n=%d: %d ≠ dense %d" n ext_gen.(n) recurrence.(n);
+    if ext_ng.(n) <> ng_recurrence.(n) then
+      fail "sparse ng n=%d: %d ≠ dense %d" n ext_ng.(n) ng_recurrence.(n)
+  done;
+  Printf.printf "\nExtended generic:     ";
+  for n = 1 to max_ext do Printf.printf "%d%s" ext_gen.(n)
+    (if n < max_ext then ", " else "\n%!") done;
+  Printf.printf "Extended non-generic: ";
+  for n = 1 to max_ext do Printf.printf "%d%s" ext_ng.(n)
+    (if n < max_ext then ", " else "\n%!") done;
   Printf.printf "\n%s\n"
     (if !all_ok then "All checks passed."
      else "*** SOME CHECKS FAILED ***")

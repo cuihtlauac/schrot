@@ -55,7 +55,13 @@ All verified by `strong_check.ml` up to n = 8, with recurrence extension to n = 
 | Cross-junction resolutions | 1, 2, 6, 24, 106, 514, 2610, 13810 | — | 1, 1, 2, 6, 19, 81, 368, 1903 |
 | Non-generic strong guillotine | 1, 2, 6, 26, 138, 834, 5542, 39638 | — | 1, 1, 2, 7, 24, 128, 744, 5143 |
 
-Extended via recurrence (n = 9, 10): generic 138100, 926008; non-generic 300610, 2391614.
+Extended to n = 20 via sparse bottom-up recurrence (tracking only non-zero states):
+
+Generic (A375913):
+1, 2, 6, 24, 114, 606, 3494, 21434, 138100, 926008, 6418576, 45755516, 334117246, 2491317430, 18919957430, 146034939362, 1143606856808, 9072734766636, 72827462660824, 590852491725920
+
+Non-generic:
+1, 2, 6, 26, 138, 834, 5542, 39638, 300610, 2391614, 19803342, 169640190, 1496293066, 13538467058, 125273931422, 1182487124842, 11362214115730, 110940123610378, 1099044317272334, 11032559127756038
 
 Burnside component sequences (n = 1..8):
 
@@ -67,14 +73,9 @@ Burnside component sequences (n = 1..8):
 
 ## What remains to do
 
-### 1. Optimize the §5.3 recurrence (extend beyond n = 10)
+### 1. ~~Optimize the §5.3 recurrence~~ (DONE)
 
-The current implementation is O(n^9) due to 5 nested loops in the S_V summation. Practical limit: n ≈ 10. Possible optimizations:
-- **Sparse iteration**: most (n, ℓ, t, r, b) states have S = 0. Skip zero states by maintaining a set of non-zero entries.
-- **Symmetry reduction**: exploit the S_V symmetries (swap ℓ↔r, swap t↔b) to reduce the state space by ~4×.
-- **Incremental computation**: compute S(n, ...) from S(n-1, ...) and S(n-2, ...) without recomputing from scratch.
-
-Target: n = 15–20, giving enough terms for reliable recurrence guessing.
+Sparse bottom-up recurrence (`guillotine_recurrence_sparse`) tracks only non-zero entries, indexed by (n, ℓ) for left-part lookup and (n, r) for right-part lookup. Extends both generic and non-generic sequences to n = 20 in seconds. Cross-validated against the dense recurrence for n ≤ 8.
 
 ### 2. Constrained generating functions for weak Burnside components
 
@@ -110,7 +111,7 @@ These constraints reduce the summation space, potentially giving tractable recur
 
 ### 4. Recurrence guessing from extended sequences
 
-With 15–20 terms (from optimized recurrence), use `gfun` (Maple/Sage) to:
+With 20 terms now available for both generic and non-generic raw sequences, use `gfun` (Maple/Sage) to:
 - Test for P-recursive (holonomic) recurrences: a_n = f(n)·a_{n−1} + g(n)·a_{n−2} + …
 - Test for algebraic generating functions
 - Compute asymptotic growth rates and compare with known constants
