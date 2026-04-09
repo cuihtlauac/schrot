@@ -90,7 +90,9 @@ f_V(y) = y + f_H(y)² / (1 − f_H(y))
 f_H(y) = y + g_V(y²) · (1 + f_V(y)) / (1 − g_V(y²))
 ```
 
-where g_V(y) = (G(y) − y)/2 is the GF for all V-type Schroder trees (known). The g_V(y²) term reflects that palindrome halves at H-nodes use arbitrary V-trees (partner = flip conjugate, not equal). The system involves y² substitution, making it a functional equation (not purely algebraic). Iterative solution in PARI/GP is in progress; needs debugging of the coefficient-level iteration.
+where g_V(y) = (G(y) − y)/2 is the GF for all V-type Schroder trees (known). The g_V(y²) term reflects that palindrome halves at H-nodes use arbitrary V-trees (partner = flip conjugate, not equal). The system involves y² substitution, making it a functional equation (not purely algebraic).
+
+**FIXME**: the PARI/GP coefficient-level iteration converges but to wrong values from n=8 onward (452 vs 456). The functional equation itself is verified correct by manual trace at n=4. The bug is likely in how the iteration handles the coupling between f_V and f_H via the y² substitution — possibly a precision or convergence order issue where f_H depends on f_V(y²) which lags behind the current f_V during iteration. Needs investigation: try computing coefficients in strict n-order (both f_V[n] and f_H[n] fully resolved before advancing to n+1), or derive a single-variable equation by elimination.
 
 With Fix_rot180 exact and 12 enumerated terms of Fix_flip, the D4-reduced weak guillotine count is: D4(n) = (S(n) + S(⌊n/2⌋+1) + 2·flip(n)) / 8.
 
@@ -102,12 +104,13 @@ With Fix_rot180 exact and 12 enumerated terms of Fix_flip, the D4-reduced weak g
 
 ### 4. Recurrence guessing from extended sequences
 
-With 20 terms now available for both generic and non-generic raw sequences, use `gfun` (Maple/Sage) to:
-- Test for P-recursive (holonomic) recurrences: a_n = f(n)·a_{n−1} + g(n)·a_{n−2} + …
-- Test for algebraic generating functions
-- Compute asymptotic growth rates and compare with known constants
+PARI/GP is installed (`gp`, version 2.15.2). Preliminary `seralgdep` runs on the 20-term generic and non-generic raw sequences found no genuine low-degree algebraic generating function (all hits were spurious — more parameters than data points). This is consistent with the paper's open question about whether the strong guillotine GF is algebraic.
 
-The Burnside components are the primary targets — they should have simpler recurrences than the combined D4-reduced sequences.
+**TODO**: retry with more targeted tools once the Burnside components have enough terms:
+- `seralgdep` on Fix_flip (currently 12 terms — need ~20 for genuine detection at degree 2-3)
+- Holonomic recurrence search: build the linear system for order-k poly-degree-d recurrences and test via `matker`. The 20-term raw sequences have enough data for order ≤ 4, degree ≤ 3.
+- Check whether the non-generic GF is D-finite by testing `seralgdep` at higher degrees (the Delannoy substitution might preserve algebraicity).
+- Compute asymptotic growth rates from the 20-term ratios: generic → ~8.1, non-generic → ~10.0.
 
 ### 5. OEIS submissions
 
