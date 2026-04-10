@@ -160,6 +160,8 @@ let split_of_string = function
   | "down"  -> Some (Tiling.H, Tiling.After)
   | _ -> None
 
+(* FIXME: arrow/border type disambiguation — border (added in tiling.ml)
+   shadows Left/Right/Up/Down here. Qualify as (Tiling.arrow) or annotate. *)
 let arrow_of_string = function
   | "left"  -> Some Tiling.Left
   | "right" -> Some Tiling.Right

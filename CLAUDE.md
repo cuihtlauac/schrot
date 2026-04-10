@@ -17,6 +17,7 @@ dune exec bin/model_check.exe -- --policy dominance --max-leaves 6
 dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
 dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
 dune exec bin/strong_check.exe -- --max-leaves 8 # strong guillotine counting + D4 orbits
+dune exec bin/checker_test.exe                   # smoke tests for the Checker library
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 
@@ -42,6 +43,8 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `bin/flip_test.ml` — SVG visualization of all 5 flip operations on example tilings. Generates `svg/flips.svg`.
 - `bin/flip_check.ml` — Model checker for flip properties: (A) size preservation, (B) validity, (C) invertibility, (D) connectivity. Verified A/B/D up to n=7 (1806 tilings). C: ~40% directly invertible; the rest are multi-level pivots.
 - `bin/strong_check.ml` — Model checker for strong guillotine counting. Three methods cross-validated: (1) cross-junction Σ 2^k, (2) Σ multiplicity(T) via boundary-tile formula, (3) §5.3 recurrence. Also: non-generic strong guillotine counting via Delannoy numbers D(a,b) and full enumeration. D4-reduced counting for both generic and non-generic. Verified up to n=8 (8558 weak, 21434 generic strong / 2800 D4, 39638 non-generic strong / 5143 D4).
+- `lib/checker.ml` — Generic exhaustive model checker on Schroder tilings. Property combinators (`conj`, `disj`, `imply`, `neg`, `for_all_tiles`, `for_all_dirs`). Enumeration modes: `All_tilings`, `Orbit_representatives` (D4 reduction), `Progressive` (orbit-first, then all). Counterexample shrinking via `close`. Witness finding. Each topology checked under one canonical labeling (structural properties only; see `.mli` for labeling model).
+- `bin/checker_test.ml` — Smoke tests for the Checker library: close-decrements-size, split-increments-size, expected failure, collect-all mode, shrinking, witness finding, imply/skip.
 
 ### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
