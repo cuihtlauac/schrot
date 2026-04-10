@@ -1,2 +1,4 @@
 _build/
 *.pdf
+*.svg
+svg/
