@@ -112,7 +112,41 @@ PARI/GP is installed (`gp`, version 2.15.2). Preliminary `seralgdep` runs on the
 - Check whether the non-generic GF is D-finite by testing `seralgdep` at higher degrees (the Delannoy substitution might preserve algebraicity).
 - Compute asymptotic growth rates from the 20-term ratios: generic → ~8.1, non-generic → ~10.0.
 
-### 5. OEIS submissions
+### 5. Permutation-based approach
+
+The paper (Section 5) establishes bijections between guillotine rectangulations and permutation classes:
+
+| Rectangulation family | Permutation class | Bijection |
+|---|---|---|
+| Weak guillotine | Av(2413, 3142) = separable permutations | β_B |
+| Weak guillotine | Av(2413, 3412, p₂) | β_TB |
+| Strong guillotine | {p₁,p₂}-avoiding 2-clumped permutations | β_{2C} |
+| Strong guillotine | {p₁,p₂}-avoiding co-2-clumped permutations | β_{C2C} |
+
+where p₁, p₂ are mesh patterns encoding the two windmill configurations (Theorem 27).
+
+**D4 on permutations**: D4 acts on rectangulations; through the bijections, this induces an action on permutations. The generators correspond to standard permutation symmetries:
+- rot180 → reverse-complement (σ → (n+1-σ(n+1-i))ᵢ)
+- flip_h → complement (σ → (n+1-σ(i))ᵢ)
+- flip_v → reversal (σ → (σ(n+1-i))ᵢ)
+
+These generate a Klein 4-group {id, complement, reversal, reverse-complement} on permutations. D4-reduced rectangulation counts = orbits of this group on the permutation class. This is a standard Burnside computation on pattern-avoiding permutations.
+
+**Available tools**:
+
+1. **Permuta** (Python, `pip install permuta`): supports classical and mesh pattern avoidance, has built-in `reverse()`, `complement()`, `reverse_complement()`. Tested: Av(2413, 3142) gives Schroder numbers. Brute-force enumeration, practical to n ≈ 12–13. Can compute D4-reduced counts as an independent cross-validation of our tree-based results. Also supports mesh pattern detection for the 2-clumped/windmill characterization.
+
+2. **COS rect generator** (C++, Merino-Mütze, https://gitlab.com/tmuetze81/cos): the paper's own implementation of combinatorial generation via permutation languages. Flag `-p12` enumerates guillotine rectangulations directly in constant amortized time per object. Outputs rectangle coordinates. Goes well beyond n = 15. Could extend the strong guillotine sequence for verification, and rectangulation coordinates could be converted to D4 orbits.
+
+3. **PARI/GP** (installed, v2.15.2): `seralgdep` and `lindep` for recurrence guessing. No permutation primitives.
+
+**Possible next steps using permutations**:
+- Install Permuta, enumerate Av(2413, 3142) up to n = 12, group by {complement, reversal} orbits → cross-validate D4-reduced weak guillotine sequence.
+- Enumerate {p₁,p₂}-avoiding 2-clumped permutations, group by orbits → cross-validate D4-reduced strong guillotine.
+- Count complement-fixed and reversal-fixed separable permutations → extend weak Burnside Fix_flip and Fix_rot180 components independently (complement-fixed = Fix_flip, reversal-fixed = Fix_rot180... exact correspondence TBD).
+- Build the COS rect tool, enumerate guillotine rectangulations for large n, compute D4 from rectangle coordinates.
+
+### 6. OEIS submissions
 
 Six sequences are candidates for OEIS submission once sufficiently many terms are computed:
 
