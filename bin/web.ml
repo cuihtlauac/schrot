@@ -160,13 +160,11 @@ let split_of_string = function
   | "down"  -> Some (Tiling.H, Tiling.After)
   | _ -> None
 
-(* FIXME: arrow/border type disambiguation — border (added in tiling.ml)
-   shadows Left/Right/Up/Down here. Qualify as (Tiling.arrow) or annotate. *)
-let arrow_of_string = function
-  | "left"  -> Some Tiling.Left
-  | "right" -> Some Tiling.Right
-  | "up"    -> Some Tiling.Up
-  | "down"  -> Some Tiling.Down
+let arrow_of_string s : Tiling.arrow option = match s with
+  | "left"  -> Some Left
+  | "right" -> Some Right
+  | "up"    -> Some Up
+  | "down"  -> Some Down
   | _ -> None
 
 let html_page = {|<!DOCTYPE html>
