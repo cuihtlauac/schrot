@@ -13,6 +13,7 @@ type t = {
 }
 
 val of_tiling : Tiling.t -> t
+val of_tiling_equal : Tiling.t -> t
 
 val rect_of : t -> int -> rect
 val center_of : t -> int -> float * float

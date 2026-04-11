@@ -48,6 +48,18 @@ let of_tiling tiling =
   let adjacency = compute_adjacency rects in
   { tiling; rects; adjacency }
 
+(* Equal-split geometry: no junction resolution.
+   Cross junctions have point contact only (excluded from adjacency),
+   producing diamonds in the adjacency poset. *)
+let of_tiling_equal tiling =
+  let equal_wt = Schrot.map_weights (fun () -> 1.0) (snd tiling) in
+  let raw = Tiling.rects_of_weighted (fst tiling, equal_wt) in
+  let rects = List.map (fun (n, (r : Tiling.rect)) ->
+    (n, { x = r.rx; y = r.ry; w = r.rw; h = r.rh })
+  ) raw in
+  let adjacency = compute_adjacency rects in
+  { tiling; rects; adjacency }
+
 (* --- Queries --- *)
 
 let rect_of g n =

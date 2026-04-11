@@ -92,11 +92,12 @@ let spectrum = [|
 
 (* Map frame depth to spectral color.
    depth 0 = red, deepest = violet, intermediate evenly spaced. *)
+let cut_index ~depth ~max_depth =
+  if max_depth <= 1 then 0
+  else min (depth * 6 / (max_depth - 1)) 6
+
 let cut_color ~depth ~max_depth =
-  if max_depth <= 1 then spectrum.(0)
-  else
-    let idx = depth * 6 / (max_depth - 1) in
-    spectrum.(min idx 6)
+  spectrum.(cut_index ~depth ~max_depth)
 
 (* Render a Schroeder tiling with spectral cut lines *)
 let dot_r = 4.
@@ -248,6 +249,82 @@ let render_adjacency_graph ~x ~y ~width ~height (g : Geom.t) =
       cx cy node_r
   ) (List.sort compare (Tiling.leaves g.tiling));
   Buffer.contents buf
+
+(* Global SVG <defs> for arrow markers — one per spectrum color.
+   Call once per SVG document, before any render_hasse_diagram. *)
+let arrow_defs =
+  let arrow_sz = 2.5 in
+  let buf = Buffer.create 512 in
+  let addf fmt = Printf.ksprintf (Buffer.add_string buf) fmt in
+  Buffer.add_string buf "<defs>\n";
+  Array.iteri (fun i color ->
+    addf "<marker id=\"arrow_%d\" markerWidth=\"%g\" markerHeight=\"%g\" \
+          refX=\"%g\" refY=\"%g\" orient=\"auto\">\
+          <path d=\"M0,0 L%g,%g L0,%g\" fill=\"%s\"/></marker>\n"
+      i (arrow_sz *. 2.) (arrow_sz *. 2.)
+      (arrow_sz *. 2.) arrow_sz
+      (arrow_sz *. 2.) arrow_sz (arrow_sz *. 2.) color
+  ) spectrum;
+  Buffer.add_string buf "</defs>\n";
+  Buffer.contents buf
+
+(* Orient an adjacency edge (a,b) into (lo, hi) where lo < hi in the
+   poset.  Uses geometry directly: left-of or below = smaller. *)
+let orient_edge rects (a, b) =
+  let ar = List.assoc a rects and br = List.assoc b rects in
+  let eps = 1e-9 in
+  if abs_float ((ar.Geom.x +. ar.Geom.w) -. br.Geom.x) < eps then (a, b)
+  else if abs_float ((br.Geom.x +. br.Geom.w) -. ar.Geom.x) < eps then (b, a)
+  else if abs_float ((ar.Geom.y +. ar.Geom.h) -. br.Geom.y) < eps then (b, a)
+  else (a, b)
+
+(* Adjacency graph with directed edges (lo → hi in the poset).
+   Planar embedding: tile centers guarantee no crossings. *)
+let render_hasse_diagram ~x ~y ~width ~height (g : Geom.t) =
+  let buf = Buffer.create 1024 in
+  let add = Buffer.add_string buf in
+  let addf fmt = Printf.ksprintf add fmt in
+  let mg = 15. in
+  let node_r = 8. in
+  let usable_w = width -. 2. *. mg in
+  let usable_h = height -. 2. *. mg in
+  let n = Tiling.size g.tiling in
+  if n <= 0 then Buffer.contents buf
+  else begin
+    let max_depth = Schrot.height (Tiling.tree g.tiling) in
+    let pos tile_id =
+      let (cx, cy) = Geom.center_of g tile_id in
+      (x +. mg +. cx *. usable_w, y +. mg +. cy *. usable_h)
+    in
+    List.iter (fun (a, b) ->
+      let (lo, hi) = orient_edge g.rects (a, b) in
+      let (ax, ay) = pos lo and (bx, by) = pos hi in
+      let depth = Tiling.cut_depth a b g.tiling in
+      let color = cut_color ~depth ~max_depth in
+      let cidx = cut_index ~depth ~max_depth in
+      (* Shorten line so arrow doesn't overlap nodes *)
+      let dx = bx -. ax and dy = by -. ay in
+      let len = sqrt (dx *. dx +. dy *. dy) in
+      if len > 0. then begin
+        let ux = dx /. len and uy = dy /. len in
+        let x1 = ax +. ux *. node_r and y1 = ay +. uy *. node_r in
+        let x2 = bx -. ux *. node_r and y2 = by -. uy *. node_r in
+        addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
+              stroke=\"%s\" stroke-width=\"2\" \
+              marker-end=\"url(#arrow_%d)\"/>\n"
+          x1 y1 x2 y2 color cidx
+      end
+    ) (Geom.edges g);
+    for tile_id = 0 to n - 1 do
+      let (cx, cy) = pos tile_id in
+      addf "<circle cx=\"%g\" cy=\"%g\" r=\"%g\" fill=\"white\" \
+            stroke=\"black\" stroke-width=\"1.5\"/>\n" cx cy node_r;
+      addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" text-anchor=\"middle\" \
+            dominant-baseline=\"central\" fill=\"black\">%d</text>\n"
+        cx cy tile_id
+    done;
+    Buffer.contents buf
+  end
 
 (* Proportional distribution: each child gets span * s / total,
    remainders distributed left to right. *)

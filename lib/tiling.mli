@@ -97,6 +97,7 @@ val d4_actions : (string * (t -> t)) array
 val v4_orbit : t -> t list
 
 val erase : t -> (unit, unit) Schrot.tiling
+val to_perm : ('a, 'f) Schrot.tiling -> int array
 val unit_tree_to_string : bool -> (unit, 'a) Schrot.t -> string
 val canonical_d4 : t -> string
 val canonical_v4 : t -> string

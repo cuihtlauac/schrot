@@ -1253,6 +1253,45 @@ let v4_orbit t =
 (* Erase leaf labels *)
 let erase (is_h, tree) = (is_h, Schrot.map (fun _ -> ()) tree)
 
+(* Separable permutation corresponding to a tiling.
+   V (direct sum): children get ascending value ranges.
+   H (skew sum): children get descending value ranges.
+   Positions = DFS leaf order (0..n-1). *)
+let to_perm (is_h_root, tree) =
+  let n = Schrot.size tree in
+  let perm = Array.make n 0 in
+  let rec go pos lo hi is_h = function
+    | Schrot.Tile _ ->
+      assert (lo = hi);
+      perm.(pos) <- lo
+    | Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      let sizes = List.map (fun (_, c) -> Schrot.size c) children_list in
+      let k = List.length sizes in
+      let pos_off = Array.make (k + 1) pos in
+      List.iteri (fun i s -> pos_off.(i + 1) <- pos_off.(i) + s) sizes;
+      let val_ranges = Array.make k (0, 0) in
+      if is_h then begin
+        let v = ref hi in
+        List.iteri (fun i s ->
+          val_ranges.(i) <- (!v - s + 1, !v);
+          v := !v - s
+        ) sizes
+      end else begin
+        let v = ref lo in
+        List.iteri (fun i s ->
+          val_ranges.(i) <- (!v, !v + s - 1);
+          v := !v + s
+        ) sizes
+      end;
+      List.iteri (fun i (_, child) ->
+        let (vlo, vhi) = val_ranges.(i) in
+        go pos_off.(i) vlo vhi (not is_h) child
+      ) children_list
+  in
+  go 0 0 (n - 1) is_h_root tree;
+  perm
+
 (* String representation of a unit tiling (erased labels) *)
 let rec unit_tree_to_string is_h = function
   | Schrot.Tile () -> "*"

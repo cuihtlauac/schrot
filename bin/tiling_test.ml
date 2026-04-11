@@ -4,6 +4,8 @@ let tile_h = 200.
 let margin = 10.
 let label_h = 46.
 let gap = 20.
+let hasse_w = 200.
+let mid_gap = 10.
 
 let write_file path content =
   let oc = open_out path in
@@ -93,7 +95,7 @@ let enum_page n cols output_dir =
   let tilings = List.sort compare_tiling (Schrot.enum n) in
   let count = List.length tilings in
   let groups = group_by_d4 tilings in
-  let cell_w = tile_w +. gap in
+  let cell_w = tile_w +. mid_gap +. hasse_w +. gap in
   let cell_h = tile_h +. label_h +. gap in
   let max_w = float_of_int cols *. cell_w +. gap in
   (* Layout: place groups left to right, wrapping rows.
@@ -133,13 +135,19 @@ let enum_page n cols output_dir =
   addf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%g\" height=\"%g\">\n"
     svg_w svg_h;
   addf "<rect width=\"%g\" height=\"%g\" fill=\"white\"/>\n" svg_w svg_h;
+  add Svg.arrow_defs;
   (* Render tilings *)
-  List.iter (fun (i, tiling, c, r) ->
+  List.iter (fun (_i, tiling, c, r) ->
     let x = gap +. float_of_int c *. cell_w in
     let y = gap +. float_of_int r *. cell_h in
-    let top_label = Printf.sprintf "#%d" i in
+    let perm = Tiling.to_perm (Tiling.erase tiling) in
+    let top_label = String.concat " "
+      (Array.to_list (Array.map string_of_int perm)) in
     let bottom_lines = [Tiling.to_string tiling] in
-    add (render_labeled_tiling ~x ~y ~top_label ~bottom_lines tiling)
+    add (render_labeled_tiling ~x ~y ~top_label ~bottom_lines tiling);
+    let g = Geom.of_tiling_equal tiling in
+    add (Svg.render_hasse_diagram ~x:(x +. tile_w +. mid_gap) ~y
+      ~width:hasse_w ~height:tile_h g)
   ) (List.rev !positions);
   (* Render dashed vertical separators *)
   List.iter (fun (sx, r) ->
@@ -191,7 +199,7 @@ let d4_page n output_dir =
     else None
   ) tilings in
   let count = List.length representatives in
-  let cell_w = tile_w +. gap in
+  let cell_w = tile_w +. mid_gap +. hasse_w +. gap in
   let cell_h = tile_h +. gap in
   (* Target landscape aspect ratio sqrt(2):1, accounting for cell shape *)
   let ratio = sqrt 2. *. cell_h /. cell_w in
@@ -205,13 +213,24 @@ let d4_page n output_dir =
   addf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%g\" height=\"%g\">\n"
     svg_w svg_h;
   addf "<rect width=\"%g\" height=\"%g\" fill=\"white\"/>\n" svg_w svg_h;
+  add Svg.arrow_defs;
   List.iteri (fun i tiling ->
     let col = i mod cols in
     let row = i / cols in
     let x = gap +. float_of_int col *. cell_w in
     let y = gap +. float_of_int row *. cell_h in
+    let perm = Tiling.to_perm (Tiling.erase tiling) in
+    let perm_str = String.concat " "
+      (Array.to_list (Array.map string_of_int perm)) in
+    addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
+          font-family=\"monospace\" text-anchor=\"middle\" \
+          dominant-baseline=\"auto\" fill=\"#666\">%s</text>\n"
+      (x +. tile_w /. 2.) (y +. 15.) perm_str;
     add (Svg.render_tiling_group ~x ~y ~margin
-      ~width:tile_w ~height:tile_h ~show_dots:false tiling)
+      ~width:tile_w ~height:tile_h ~show_dots:false tiling);
+    let g = Geom.of_tiling_equal tiling in
+    add (Svg.render_hasse_diagram ~x:(x +. tile_w +. mid_gap) ~y
+      ~width:hasse_w ~height:tile_h g)
   ) representatives;
   add "</svg>\n";
   let path = Printf.sprintf "%s/d4_schroeder_%d.svg" output_dir n in
