@@ -210,17 +210,17 @@ let () =
      Some `Right,
      t, apply (Tiling.wall_slide 3 0));
 
-    (* Dissolve: dissolve v(2,1) pair *)
-    ("Dissolve", "d on 2",
-     2, [1],
-     None,
-     t, apply (Tiling.simple_dissolve 2));
-
     (* 2-subframe: group tiles 3 and 4 into a sub-frame *)
-    ("2-subframe", "f+Right on 4",
-     4, [3],
+    ("2-subframe", "f+Left on 3",
+     3, [4],
+     Some `Left,
+     t, apply (Tiling.simple_create 4 3));
+
+    (* Enter: push tile 3 into h(v(2,1), 0), pairing with tile 2 *)
+    ("Enter", "e+Right on 3",
+     3, [2],
      Some `Right,
-     t, apply (Tiling.simple_create 3 4));
+     t, apply (Tiling.pivot_in 3 2));
 
     (* Exit: extract tile 2 from v(2,1) *)
     ("Exit", "x on 2",
@@ -228,11 +228,11 @@ let () =
      None,
      t, apply (Tiling.pivot_out 2));
 
-    (* Enter: push tile 3 into h(v(2,1), 0), pairing with tile 2 *)
-    ("Enter", "e+Right on 3",
-     3, [2],
-     Some `Right,
-     t, apply (Tiling.pivot_in 3 2));
+    (* Dissolve: dissolve v(2,1) pair *)
+    ("Dissolve", "d on 2",
+     2, [1],
+     None,
+     t, apply (Tiling.simple_dissolve 2));
   ] in
 
   let nrows = List.length rows in
