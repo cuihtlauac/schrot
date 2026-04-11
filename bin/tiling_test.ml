@@ -48,7 +48,7 @@ and compare_children l1 l2 =
   | [], [] -> 0
   | [], _ -> -1
   | _, [] -> 1
-  | a :: ra, b :: rb ->
+  | (_, a) :: ra, (_, b) :: rb ->
     let c = compare_tree a b in
     if c <> 0 then c else compare_children ra rb
 
@@ -62,7 +62,7 @@ let label_unit_tiling (is_h, tree) =
   let counter = ref 0 in
   let rec label = function
     | Schrot.Tile () -> let n = !counter in incr counter; Schrot.Tile n
-    | Schrot.Frame ch -> Schrot.Frame (List2.map label ch)
+    | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, label c)) ch)
   in
   (is_h, label tree)
 
@@ -159,14 +159,14 @@ let enum_page n cols output_dir =
 let operations_page output_dir =
   let examples = [
     (* Start with simple 2-tile tilings *)
-    (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [])));
-    (false, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [])));
+    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
+    (false, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
     (* 3-way split *)
-    (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
+    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
     (* Nested *)
-    (true, Schrot.Frame (List2.Cons2 (
+    (true, Schrot.unit_frame (List2.Cons2 (
       Tile 0,
-      Frame (List2.Cons2 (Tile 1, Tile 2, [])),
+      Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 2, [])),
       [])));
   ] in
   let ops_per_example = 5 in (* before, split_h 0, split_v 0, close 0, close 1 *)

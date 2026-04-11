@@ -32,12 +32,12 @@ let assert_invertible name t flip =
 (* --- Test cases --- *)
 
 (* n=2: simple flip at root *)
-let t_h01 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [])))
+let t_h01 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])))
 
 (* n=3: all 6 tilings cover the basic operations *)
-let t_h012 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])))
-let t_h_v01_2 : Tiling.t = (true, Schrot.Frame (List2.Cons2 (
-  Frame (List2.Cons2 (Tile 0, Tile 1, [])), Tile 2, [])))
+let t_h012 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])))
+let t_h_v01_2 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
+  Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])), Tile 2, [])))
 
 let () =
   (* Simple flip at root *)

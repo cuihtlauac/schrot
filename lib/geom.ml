@@ -1,5 +1,6 @@
-(* Tiling geometry on the unit square.
-   Computes tile rectangles via resolved splits and adjacency from them.
+(* Tiling geometry in normalized coordinates on [0,1]².
+   All positions and dimensions are relative to the unit square;
+   SVG renderers scale these to pixel coordinates at render time.
    Adjacency excludes point contact (Eppstein et al. 2009). *)
 
 type rect = { x: float; y: float; w: float; h: float }

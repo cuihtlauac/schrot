@@ -205,7 +205,7 @@ let render_tiling_group ~x ~y ~width ~height ~margin
 (* Node-link tree diagram: root at top, leaves at bottom.
    Leaves get sequential x-positions; internal nodes centered over children.
    Internal nodes colored by depth using the same spectral palette as cut lines. *)
-let render_tree_diagram ~x ~y ~width ~height (tree : 'a Schrot.t) =
+let render_tree_diagram ~x ~y ~width ~height (tree : ('a, 'f) Schrot.t) =
   let buf = Buffer.create 1024 in
   let addf fmt = Printf.ksprintf (Buffer.add_string buf) fmt in
   let n_leaves = Schrot.size tree in
@@ -230,7 +230,7 @@ let render_tree_diagram ~x ~y ~width ~height (tree : 'a Schrot.t) =
               stroke=\"black\" stroke-width=\"1\"/>\n" cx cy node_r;
         (cx, cy)
       | Schrot.Frame children ->
-        let child_positions = List.map (go (d + 1)) (List2.to_list children) in
+        let child_positions = List.map (fun (_, c) -> go (d + 1) c) (List2.to_list children) in
         let cx_sum = List.fold_left (fun acc (cx, _) -> acc +. cx) 0. child_positions in
         let cx = cx_sum /. float_of_int (List.length child_positions) in
         let cy = y +. margin_y +. float_of_int d *. y_step in

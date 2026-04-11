@@ -9,7 +9,7 @@ let label_tiling (is_h, tree) =
   let counter = ref 0 in
   let rec go = function
     | Schrot.Tile () -> let n = !counter in incr counter; Schrot.Tile n
-    | Schrot.Frame ch -> Schrot.Frame (List2.map go ch)
+    | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, go c)) ch)
   in
   (is_h, go tree)
 
@@ -22,7 +22,7 @@ let is_valid_labeling t =
 let rec tree_valid = function
   | Schrot.Tile _ -> true
   | Schrot.Frame ch ->
-    List2.length ch >= 2 && List2.for_all tree_valid ch
+    List2.length ch >= 2 && List2.for_all (fun (_, c) -> tree_valid c) ch
 
 let tiling_valid (_, tree) = tree_valid tree && is_valid_labeling (false, tree)
 

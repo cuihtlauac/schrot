@@ -26,23 +26,23 @@ let render_labeled_tiling ~x ~y ~bottom_lines tiling =
 let flips_page output_dir =
   let examples = [
     (* Simple flip at root *)
-    (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [])));
+    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
     (* Simple create + wall slide *)
-    (true, Schrot.Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
+    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
     (* Simple dissolve + pivot_out + pivot_in *)
-    (true, Schrot.Frame (List2.Cons2 (
-      Frame (List2.Cons2 (Tile 0, Tile 1, [])),
+    (true, Schrot.unit_frame (List2.Cons2 (
+      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])),
       Tile 2, [])));
     (* Pivot_out from 3-ary + wall slide *)
-    (true, Schrot.Frame (List2.Cons2 (
-      Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
+    (true, Schrot.unit_frame (List2.Cons2 (
+      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
       Tile 3, [])));
     (* Pivot_in from both sides *)
-    (false, Schrot.Frame (List2.Cons2 (Tile 0,
-      Frame (List2.Cons2 (Tile 1, Tile 2, [])), [Tile 3])));
+    (false, Schrot.unit_frame (List2.Cons2 (Tile 0,
+      Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 2, [])), [Tile 3])));
     (* Complex: 5-tile with multiple flip types *)
-    (true, Schrot.Frame (List2.Cons2 (
-      Frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
+    (true, Schrot.unit_frame (List2.Cons2 (
+      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
       Tile 3, [Tile 4])));
   ] in
   (* For each example, enumerate flips *)
@@ -90,7 +90,7 @@ let label_tiling (is_h, tree) =
   let c = ref 0 in
   let rec go = function
     | Schrot.Tile () -> let n = !c in incr c; Schrot.Tile n
-    | Schrot.Frame ch -> Schrot.Frame (List2.map go ch)
+    | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, go c)) ch)
   in (is_h, go tree)
 
 (* Collect non-invertible flips up to max_n *)

@@ -147,7 +147,7 @@ let random_tiling n =
         groups := Array.to_list (Array.sub arr !prev (len - !prev)) :: !groups;
         let children = List.rev !groups |> List.map build in
         match children with
-        | a :: b :: rest -> Schrot.Frame (List2.Cons2 (a, b, rest))
+        | a :: b :: rest -> Schrot.unit_frame (List2.Cons2 (a, b, rest))
         | _ -> assert false
     in
     (Random.bool (), build (List.init n Fun.id))

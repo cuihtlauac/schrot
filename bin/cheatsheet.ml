@@ -181,11 +181,11 @@ let () =
      Tile 3 adjacent to h-frame in v-frame -> enter
      Tile 6 at bottom makes the v-frame cut non-wall
   *)
-  let t : Tiling.t = (true, Schrot.Frame (List2.Cons2 (
+  let t : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
     Tile 5,
-    Frame (List2.Cons2 (Tile 4, Tile 3,
-      [Frame (List2.Cons2 (
-        Frame (List2.Cons2 (Tile 2, Tile 1, [])),
+    Schrot.unit_frame (List2.Cons2 (Tile 4, Tile 3,
+      [Schrot.unit_frame (List2.Cons2 (
+        Schrot.unit_frame (List2.Cons2 (Tile 2, Tile 1, [])),
         Tile 0, []))])),
     [Tile 6]))) in
 

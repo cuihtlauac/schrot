@@ -84,6 +84,21 @@ The core representation is `int Schrot.tiling = bool * int Schrot.t`:
 - Frame with 1 remaining child collapses (child promoted)
 - Root collapse flips `is_h` (surviving child was at opposite orientation)
 
+### Weighted tree design
+
+The tree type carries per-child weights for computing split ratios:
+
+```ocaml
+type ('a, 'f) t = Tile of 'a | Frame of ('f * ('a, 'f) t) List2.t
+type ('a, 'f) tiling = bool * ('a, 'f) t
+```
+
+Each child in a Frame is paired with a weight `'f`. Cut ratios are computed proportionally from children's weights, like springs in LaTeX: children with weights [2, 3, 1] get 2/6, 3/6, 1/6 of the parent's span. With `'f = unit`, the tree carries topology only (equal splits by default). The current working type is `(int, unit) Schrot.tiling`.
+
+**Why not unlabeled leaves?** An alternative design `'a t = Tile | Frame of ('a * 'a t) List2.t` (single type parameter, unlabeled leaves, edge weights) is cleaner for pure enumeration. However, it lacks stable tile identity: inserting or removing a tile shifts all subsequent positional indices. For a keyboard-driven window manager, the focused window needs an identity that survives splits, closes, and flips. Intrinsic labels (`Tile of 'a`) provide this; positional indices do not.
+
+**Convenience**: `Schrot.unit_frame children` wraps a `List2.t` of trees with `()` weights. `Schrot.map_weights f t` transforms weights without touching leaf labels.
+
 ## Conventions
 
 - Leaf numbering starts at 0.

@@ -21,7 +21,7 @@ let label_tiling (is_h, unit_tree) =
   let counter = ref 0 in
   let rec label = function
     | Schrot.Tile () -> let k = !counter in incr counter; Schrot.Tile k
-    | Schrot.Frame ch -> Schrot.Frame (List2.map label ch)
+    | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, label c)) ch)
   in
   ((is_h, label unit_tree) : Tiling.t)
 

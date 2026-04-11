@@ -39,7 +39,7 @@ type counter_policy =
 (** {1 Properties} *)
 
 (** A property to check, with a label for diagnostics.
-    The predicate receives a labeled tiling ([int Schrot.tiling])
+    The predicate receives a labeled tiling ([(int, unit) Schrot.tiling])
     where leaves are numbered 0..n-1 left-to-right. *)
 type property
 

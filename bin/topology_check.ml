@@ -3,7 +3,7 @@ let label_tiling (is_h, unit_tree) =
   let counter = ref 0 in
   let rec label = function
     | Schrot.Tile () -> let k = !counter in incr counter; Schrot.Tile k
-    | Schrot.Frame ch -> Schrot.Frame (List2.map label ch)
+    | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, label c)) ch)
   in
   ((is_h, label unit_tree) : Tiling.t)
 
@@ -20,7 +20,7 @@ let () =
     let count = List.length tilings in
     Printf.printf "n=%d: %d tilings\n%!" n count;
     (* Group by unordered tree shape *)
-    let tbl : (string, (bool * unit Schrot.t) list) Hashtbl.t =
+    let tbl : (string, (unit, unit) Schrot.tiling list) Hashtbl.t =
       Hashtbl.create 64 in
     List.iter (fun ((_is_h, _tree) as tiling) ->
       let canon = Tiling.canonical_d4 (label_tiling tiling) in
