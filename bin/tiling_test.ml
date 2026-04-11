@@ -190,21 +190,8 @@ let d4_page n output_dir =
     if canon = self_erased then Some labeled
     else None
   ) tilings in
-  (* Sort by graph fingerprint so isomorphic adjacency graphs appear side by side *)
-  let with_fp = List.map (fun t ->
-    let g = Geom.of_tiling t in
-    let edges = Geom.edges g in
-    let fp = Tiling.adjacency_fingerprint n edges in
-    (t, fp)
-  ) representatives in
-  let representatives = List.sort (fun (_, fp1) (_, fp2) ->
-    compare fp1 fp2
-  ) with_fp |> List.map fst in
   let count = List.length representatives in
-  let tree_w = tile_w in
-  let graph_w = tile_w in
-  let mid_w = 30. in (* middle column for label + dots *)
-  let cell_w = tile_w +. mid_w +. tree_w +. graph_w +. gap in
+  let cell_w = tile_w +. gap in
   let cell_h = tile_h +. gap in
   (* Target landscape aspect ratio sqrt(2):1, accounting for cell shape *)
   let ratio = sqrt 2. *. cell_h /. cell_w in
@@ -223,40 +210,11 @@ let d4_page n output_dir =
     let row = i / cols in
     let x = gap +. float_of_int col *. cell_w in
     let y = gap +. float_of_int row *. cell_h in
-    (* Tiling with junction-resolved splits *)
     add (Svg.render_tiling_group ~x ~y ~margin
-      ~width:tile_w ~height:tile_h ~show_dots:false tiling);
-    (* Middle column: number label + color dots vertically *)
-    let mid_cx = x +. tile_w +. mid_w /. 2. in
-    addf "<text x=\"%g\" y=\"%g\" font-size=\"11\" \
-          font-family=\"monospace\" text-anchor=\"middle\" \
-          fill=\"black\">#%d</text>\n"
-      mid_cx (y +. 14.) i;
-    let tree = Tiling.tree tiling in
-    let max_depth = Schrot.height tree in
-    if max_depth > 0 then begin
-      let dot_r = 4. in
-      let dot_step = 10. in
-      let total_h = float_of_int max_depth *. dot_step in
-      let start_y = y +. (tile_h -. total_h) /. 2. +. 10. in
-      for d = 0 to max_depth - 1 do
-        let color = Svg.cut_color ~depth:d ~max_depth in
-        let cy = start_y +. float_of_int d *. dot_step in
-        addf "<circle cx=\"%g\" cy=\"%g\" r=\"%g\" fill=\"%s\"/>\n"
-          mid_cx cy dot_r color
-      done
-    end;
-    (* Tree diagram *)
-    add (Svg.render_tree_diagram
-      ~x:(x +. tile_w +. mid_w) ~y ~width:tree_w ~height:tile_h tree);
-    (* Adjacency graph *)
-    let g = Geom.of_tiling tiling in
-    add (Svg.render_adjacency_graph
-      ~x:(x +. tile_w +. mid_w +. tree_w) ~y
-      ~width:graph_w ~height:tile_h g)
+      ~width:tile_w ~height:tile_h ~show_dots:false tiling)
   ) representatives;
   add "</svg>\n";
-  let path = Printf.sprintf "%s/d4_shrot_%d.svg" output_dir n in
+  let path = Printf.sprintf "%s/d4_schroeder_%d.svg" output_dir n in
   write_file path (Buffer.contents buf);
   Printf.printf "Wrote %s (%d D4 orbits)\n" path count
 
