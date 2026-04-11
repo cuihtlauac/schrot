@@ -111,7 +111,7 @@ let dot_row_h = 2. *. dot_r +. 4. (* dots + half text height gap *)
 let render_tiling_group ~x ~y ~width ~height ~margin
     ?(selected : int option) ?(interactive = false)
     ?(show_labels = true) ?(show_dots = true)
-    ?color_of (tiling : Tiling.t) =
+    ?color_of ?weighted (tiling : Tiling.t) =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
@@ -122,7 +122,7 @@ let render_tiling_group ~x ~y ~width ~height ~margin
   let y0 = y +. margin +. (if has_dots then dot_row_h else 0.) in
   let w0 = width -. 2. *. margin in
   let h0 = height -. 2. *. margin -. (if has_dots then dot_row_h else 0.) in
-  let wt = Tiling.resolve_splits tiling in
+  let wt = match weighted with Some w -> w | None -> Tiling.resolve_splits tiling in
   (* Pass 1: tile backgrounds from weighted tree *)
   let _ = add in (* used below *)
   let rects = Tiling.rects_of_weighted wt in
@@ -175,6 +175,51 @@ let render_tiling_group ~x ~y ~width ~height ~margin
         cx cy dot_r color
     done
   end;
+  Buffer.contents buf
+
+(* Render clickable segment overlays on top of a tiling.
+   Each cut segment gets a transparent hit-target rect and, when selected,
+   a highlighted line.  Viewport mapping matches render_tiling_group. *)
+let render_segment_overlays ~x ~y ~width ~height ~margin
+    ?(selected_segment : int option)
+    (segments : Tiling.segment list) (tiling : Tiling.t) =
+  let buf = Buffer.create 1024 in
+  let addf fmt = Printf.ksprintf (Buffer.add_string buf) fmt in
+  let tree = Tiling.tree tiling in
+  let max_depth = Schrot.height tree in
+  let has_dots = max_depth > 0 in
+  let x0 = x +. margin in
+  let y0 = y +. margin +. (if has_dots then dot_row_h else 0.) in
+  let w0 = width -. 2. *. margin in
+  let h0 = height -. 2. *. margin -. (if has_dots then dot_row_h else 0.) in
+  let hit_w = 10. in
+  List.iter (fun (seg : Tiling.segment) ->
+    let sx1 = x0 +. seg.seg_x1 *. w0 in
+    let sy1 = y0 +. seg.seg_y1 *. h0 in
+    let sx2 = x0 +. seg.seg_x2 *. w0 in
+    let sy2 = y0 +. seg.seg_y2 *. h0 in
+    let is_sel = selected_segment = Some seg.seg_id in
+    addf "<g data-segment=\"%d\" style=\"cursor:%s\">\n"
+      seg.seg_id (if seg.seg_is_h then "ns-resize" else "ew-resize");
+    if seg.seg_is_h then
+      addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" \
+            fill=\"%s\" opacity=\"%g\" pointer-events=\"all\"/>\n"
+        sx1 (sy1 -. hit_w /. 2.) (sx2 -. sx1) hit_w
+        (if is_sel then "#f0c040" else "transparent")
+        (if is_sel then 0.3 else 0.0)
+    else
+      addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" \
+            fill=\"%s\" opacity=\"%g\" pointer-events=\"all\"/>\n"
+        (sx1 -. hit_w /. 2.) sy1 hit_w (sy2 -. sy1)
+        (if is_sel then "#f0c040" else "transparent")
+        (if is_sel then 0.3 else 0.0);
+    if is_sel then
+      addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
+            stroke=\"#f0c040\" stroke-width=\"4\" opacity=\"0.8\" \
+            pointer-events=\"none\"/>\n"
+        sx1 sy1 sx2 sy2;
+    addf "</g>\n"
+  ) segments;
   Buffer.contents buf
 
 (* Node-link tree diagram: root at top, leaves at bottom.

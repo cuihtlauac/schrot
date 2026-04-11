@@ -1,19 +1,39 @@
 
 type state = {
   mutable tiling : Tiling.t;
+  mutable weighted : (int, float) Schrot.tiling;
+  mutable segments : Tiling.segment list;
   mutable selected : int option;
+  mutable selected_segment : int option;
   mutable last_command : string option;
   mutable prev_tiling : Tiling.t option;
   mutable history : (Tiling.t * int option) list;
 }
 
-let state = {
-  tiling = (false, Schrot.Tile 0);
-  selected = Some 0;
-  last_command = None;
-  prev_tiling = None;
-  history = [];
-}
+let init_weighted t =
+  Tiling.resolve_splits t
+
+let state =
+  let t = (false, Schrot.Tile 0) in
+  let wt = init_weighted t in
+  {
+    tiling = t;
+    weighted = wt;
+    segments = Tiling.enumerate_segments wt;
+    selected = Some 0;
+    selected_segment = None;
+    last_command = None;
+    prev_tiling = None;
+    history = [];
+  }
+
+let update_geometry () =
+  state.weighted <- init_weighted state.tiling;
+  state.segments <- Tiling.enumerate_segments state.weighted;
+  state.selected_segment <- None
+
+let update_segments () =
+  state.segments <- Tiling.enumerate_segments state.weighted
 
 let push_history () =
   state.history <- (state.tiling, state.selected) :: state.history
@@ -35,15 +55,28 @@ let json_str s = Printf.sprintf "\"%s\"" (escape_json_string s)
 let json_str_opt = function None -> "null" | Some s -> json_str s
 let json_int_opt = function None -> "null" | Some n -> string_of_int n
 
-let svg_of_tiling ?selected tiling =
-  Svg.render_tiling_group ~x:0. ~y:0. ~width:500. ~height:400. ~margin:20.
-    ?selected ~interactive:true tiling
+let svg_of_tiling_weighted ?selected ?selected_segment ~weighted ~segments tiling =
+  let base = Svg.render_tiling_group ~x:0. ~y:0. ~width:500. ~height:400. ~margin:20.
+    ?selected ~interactive:true ~weighted tiling in
+  let overlays = Svg.render_segment_overlays ~x:0. ~y:0. ~width:500. ~height:400. ~margin:20.
+    ?selected_segment segments tiling in
+  base ^ overlays
 
 let svg_of_tiling_small tiling =
   Svg.render_tiling_group ~x:0. ~y:0. ~width:240. ~height:192. ~margin:10. tiling
 
+let hasse_svg_of_state () =
+  let g = Geom.of_weighted ~min_overlap:1e-2 state.weighted state.tiling in
+  Svg.arrow_defs ^
+  Svg.render_hasse_diagram ~x:0. ~y:0. ~width:250. ~height:250. g
+
 let state_json () =
-  let svg = svg_of_tiling ?selected:state.selected state.tiling in
+  let svg = svg_of_tiling_weighted
+    ?selected:state.selected
+    ?selected_segment:state.selected_segment
+    ~weighted:state.weighted ~segments:state.segments
+    state.tiling in
+  let hasse = hasse_svg_of_state () in
   let prev_svg = match state.prev_tiling with
     | Some t -> json_str (svg_of_tiling_small t)
     | None -> "null"
@@ -54,15 +87,17 @@ let state_json () =
   in
   let tiles = List.sort compare (Tiling.leaves state.tiling) in
   Printf.sprintf
-    {|{"svg":%s,"term":%s,"prev_svg":%s,"prev_term":%s,"tiles":[%s],"selected":%s,"command":%s,"n_tiles":%d}|}
+    {|{"svg":%s,"term":%s,"prev_svg":%s,"prev_term":%s,"tiles":[%s],"selected":%s,"selected_segment":%s,"command":%s,"n_tiles":%d,"hasse_svg":%s}|}
     (json_str svg)
     (json_str (Tiling.to_string state.tiling))
     prev_svg
     prev_term
     (String.concat "," (List.map string_of_int tiles))
     (json_int_opt state.selected)
+    (json_int_opt state.selected_segment)
     (json_str_opt state.last_command)
     (Tiling.size state.tiling)
+    (json_str hasse)
 
 (* Minimal JSON value parser *)
 let parse_json_field body key =
@@ -196,7 +231,7 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
   cursor: pointer; }
 .copy-btn:hover { background: #0f3460; color: #e0e0e0; }
 .help { font-size: 12px; color: #666; line-height: 1.8; text-align: center;
-  border-top: 1px solid #0f3460; padding-top: 12px; margin-top: 8px; }
+  border-top: 1px solid #0f3460; padding-top: 12px; margin-top: 8px; max-width: 820px; }
 .help kbd { background: #16213e; border: 1px solid #0f3460; border-radius: 3px;
   padding: 1px 5px; font-size: 11px; }
 .dim { opacity: 0.4; }
@@ -219,6 +254,10 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
     <div class="panel-label">current</div>
     <div class="panel" id="svg-container"></div>
   </div>
+  <div>
+    <div class="panel-label">adjacency poset</div>
+    <div class="panel" id="hasse-container"><svg xmlns="http://www.w3.org/2000/svg" width="250" height="250"></svg></div>
+  </div>
 </div>
 <div class="info"><span class="label">Before:</span> <span id="prev-term"></span></div>
 <div class="info"><span class="label">After: </span> <span id="term"></span></div>
@@ -229,18 +268,21 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
 <div id="mode" style="font-size:14px; min-height:1.4em; color:#f0c040; text-align:center;"></div>
 <div class="help">
   Click tile to select &middot;
-  Arrows navigate &middot;
+  Click cut to select segment &middot;
+  Arrows navigate / slide segment &middot;
   <kbd>Alt</kbd>+Arrow split &middot;
   <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
-  <kbd>Shift</kbd>+Arrow Slide &middot;
+  <kbd>Shift</kbd>+Arrow wall slide &middot;
   <kbd>d</kbd> dissolve &middot;
   <kbd>x</kbd> exit frame &middot;
   <kbd>f</kbd>+Arrow 2-subframe &middot;
   <kbd>e</kbd>+Arrow enter frame &middot;
+  <kbd>Esc</kbd> deselect &middot;
   <kbd>Ctrl+Z</kbd> undo
 </div>
 <script>
 let selectedTile = null;
+let selectedSegment = null;
 let currentData = {};
 let pendingMode = null; // 'subframe' or 'enter'
 
@@ -256,11 +298,33 @@ function makeSvg(svgContent, w, h) {
     '<rect width="' + w + '" height="' + h + '" fill="#16213e"/>' + svgContent + '</svg>';
 }
 
+function attachHandlers(container) {
+  container.querySelectorAll('g[data-tile]').forEach(g => {
+    g.addEventListener('click', () => {
+      selectedTile = parseInt(g.dataset.tile);
+      selectedSegment = null;
+      refreshState();
+    });
+  });
+  container.querySelectorAll('g[data-segment]').forEach(g => {
+    g.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedSegment = parseInt(g.dataset.segment);
+      api('POST', '/api/select_segment', { id: String(selectedSegment) })
+        .then(data => updateDisplay(data));
+    });
+  });
+}
+
 function updateDisplay(data) {
   currentData = data;
   const c = document.getElementById('svg-container');
   c.innerHTML = makeSvg(data.svg, 500, 400);
   document.getElementById('term').textContent = data.term;
+
+  // Hasse diagram
+  const hc = document.getElementById('hasse-container');
+  hc.innerHTML = makeSvg(data.hasse_svg, 250, 250);
 
   const pc = document.getElementById('prev-container');
   const pl = document.getElementById('prev-label');
@@ -286,13 +350,14 @@ function updateDisplay(data) {
   if (data.selected !== null && data.selected !== undefined) {
     selectedTile = data.selected;
   }
+  if (data.selected_segment !== null && data.selected_segment !== undefined) {
+    selectedSegment = data.selected_segment;
+  } else {
+    selectedSegment = null;
+  }
 
-  c.querySelectorAll('g[data-tile]').forEach(g => {
-    g.addEventListener('click', () => {
-      selectedTile = parseInt(g.dataset.tile);
-      refreshState();
-    });
-  });
+  attachHandlers(c);
+  updateMode();
 }
 
 function initTilesDropdown() {
@@ -318,11 +383,18 @@ async function postCommand(action, tile, dir) {
   if (data.selected !== null && data.selected !== undefined) {
     selectedTile = data.selected;
   }
+  selectedSegment = null;
+  updateDisplay(data);
+}
+
+async function slideSegment(id, dir) {
+  const data = await api('POST', '/api/slide_segment', { id: String(id), dir });
   updateDisplay(data);
 }
 
 document.getElementById('reset').addEventListener('click', async () => {
   selectedTile = 0;
+  selectedSegment = null;
   const data = await api('POST', '/api/reset');
   selectedTile = data.selected;
   updateDisplay(data);
@@ -330,12 +402,14 @@ document.getElementById('reset').addEventListener('click', async () => {
 
 document.getElementById('random').addEventListener('click', async () => {
   const n = parseInt(document.getElementById('n-tiles').value) || 3;
+  selectedSegment = null;
   const data = await api('POST', '/api/random', { n });
   selectedTile = data.selected;
   updateDisplay(data);
 });
 
 document.getElementById('undo').addEventListener('click', async () => {
+  selectedSegment = null;
   const data = await api('POST', '/api/undo');
   selectedTile = data.selected;
   updateDisplay(data);
@@ -356,7 +430,10 @@ document.getElementById('copy').addEventListener('click', () => {
 
 function updateMode() {
   const el = document.getElementById('mode');
-  if (pendingMode) {
+  if (selectedSegment !== null) {
+    el.textContent = 'segment ' + selectedSegment + ' — arrows slide';
+    el.style.color = '#f0c040';
+  } else if (pendingMode) {
     el.textContent = pendingMode + ' \u2192 arrow';
     el.style.color = '#f0c040';
   } else {
@@ -366,17 +443,35 @@ function updateMode() {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (selectedSegment !== null) {
+      selectedSegment = null;
+      api('POST', '/api/select_segment', { id: null })
+        .then(data => updateDisplay(data));
+      return;
+    }
     if (pendingMode) { pendingMode = null; updateMode(); return; }
     selectedTile = null; refreshState(); return;
   }
   if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault(); document.getElementById('undo').click(); return;
+    e.preventDefault();
+    selectedSegment = null;
+    document.getElementById('undo').click();
+    return;
   }
-  if (selectedTile === null) return;
+
   const dir = { ArrowLeft: 'left', ArrowRight: 'right',
                  ArrowUp: 'up', ArrowDown: 'down' }[e.key];
 
-  // Pending mode: c/i + arrow
+  // Segment mode: arrows slide the selected segment
+  if (selectedSegment !== null && dir) {
+    e.preventDefault();
+    slideSegment(selectedSegment, dir);
+    return;
+  }
+
+  if (selectedTile === null) return;
+
+  // Pending mode: f/e + arrow
   if (pendingMode && dir) {
     e.preventDefault();
     postCommand(pendingMode, selectedTile, dir);
@@ -511,6 +606,7 @@ let () =
           push_history ();
           state.prev_tiling <- Some prev;
           state.tiling <- new_tiling;
+          update_geometry ();
           state.last_command <- Some cmd_name;
           (* Selection logic *)
           let new_leaves = List.sort compare (Tiling.leaves new_tiling) in
@@ -533,6 +629,7 @@ let () =
 
     Dream.post "/api/reset" (fun _req ->
       state.tiling <- (false, Schrot.Tile 0);
+      update_geometry ();
       state.prev_tiling <- None;
       state.selected <- Some 0;
       state.last_command <- None;
@@ -544,6 +641,7 @@ let () =
        | (prev, prev_sel) :: rest ->
          state.prev_tiling <- Some state.tiling;
          state.tiling <- prev;
+         update_geometry ();
          state.selected <- prev_sel;
          state.history <- rest;
          state.last_command <- Some "undo"
@@ -558,6 +656,7 @@ let () =
         in
         let t = random_tiling n in
         state.tiling <- t;
+        update_geometry ();
         state.prev_tiling <- None;
         state.selected <- Some 0;
         state.last_command <- None;
@@ -577,4 +676,38 @@ let () =
           Dream.json (state_json ())
         | _ ->
           Dream.json ~status:`Bad_Request {|{"error":"missing tile or dir"}|}));
+
+    Dream.post "/api/select_segment" (fun _req ->
+      Lwt.bind (Dream.body _req) (fun body ->
+        let seg_id = Option.bind (parse_json_field body "id")
+          (fun s -> try Some (int_of_string s) with _ -> None) in
+        state.selected_segment <- seg_id;
+        Dream.json (state_json ())));
+
+    Dream.post "/api/slide_segment" (fun _req ->
+      Lwt.bind (Dream.body _req) (fun body ->
+        let seg_id = Option.bind (parse_json_field body "id")
+          (fun s -> try Some (int_of_string s) with _ -> None) in
+        let dir = Option.bind (parse_json_field body "dir") arrow_of_string in
+        let quantum = 0.03 in
+        (match seg_id, dir with
+         | Some id, Some arrow ->
+           (match List.find_opt
+              (fun (s : Tiling.segment) -> s.seg_id = id) state.segments with
+            | Some seg ->
+              let delta = match arrow, seg.seg_is_h with
+                | (Up | Left), _ -> -. quantum
+                | (Down | Right), _ -> quantum
+              in
+              (match Tiling.adjust_weight
+                       seg.seg_path seg.seg_cut delta state.weighted with
+               | Some wt' ->
+                 state.weighted <- wt';
+                 update_segments ();
+                 state.last_command <-
+                   Some (Printf.sprintf "slide segment %d" id)
+               | None -> ())
+            | None -> ())
+         | _ -> ());
+        Dream.json (state_json ())));
   ]

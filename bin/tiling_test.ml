@@ -145,7 +145,7 @@ let enum_page n cols output_dir =
       (Array.to_list (Array.map string_of_int perm)) in
     let bottom_lines = [Tiling.to_string tiling] in
     add (render_labeled_tiling ~x ~y ~top_label ~bottom_lines tiling);
-    let g = Geom.of_tiling_equal tiling in
+    let g = Geom.of_tiling tiling in
     add (Svg.render_hasse_diagram ~x:(x +. tile_w +. mid_gap) ~y
       ~width:hasse_w ~height:tile_h g)
   ) (List.rev !positions);
@@ -228,7 +228,7 @@ let d4_page n output_dir =
       (x +. tile_w /. 2.) (y +. 15.) perm_str;
     add (Svg.render_tiling_group ~x ~y ~margin
       ~width:tile_w ~height:tile_h ~show_dots:false tiling);
-    let g = Geom.of_tiling_equal tiling in
+    let g = Geom.of_tiling tiling in
     add (Svg.render_hasse_diagram ~x:(x +. tile_w +. mid_gap) ~y
       ~width:hasse_w ~height:tile_h g)
   ) representatives;

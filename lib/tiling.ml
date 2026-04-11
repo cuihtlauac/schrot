@@ -503,6 +503,109 @@ let cuts_of_weighted (is_h_root, tree) =
   go 0. 0. 1. 1. is_h_root 0 tree;
   lines
 
+(* --- Segment enumeration and weight adjustment --- *)
+
+type segment = {
+  seg_id : int;
+  seg_path : int list;
+  seg_cut : int;
+  seg_is_h : bool;
+  seg_depth : int;
+  seg_x1 : float; seg_y1 : float;
+  seg_x2 : float; seg_y2 : float;
+}
+
+let enumerate_segments (is_h_root, tree) =
+  let segments = ref [] in
+  let next_id = ref 0 in
+  let rec go rev_path x y w h is_h depth = function
+    | Schrot.Tile _ -> ()
+    | Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      let k = List.length children_list in
+      let total = List.fold_left (fun acc (wt, _) -> acc +. wt) 0. children_list in
+      let cum = Array.make (k + 1) 0. in
+      List.iteri (fun i (wt, _) ->
+        cum.(i + 1) <- cum.(i) +. wt /. total
+      ) children_list;
+      for cut = 0 to k - 2 do
+        let ci = cut + 1 in
+        let id = !next_id in
+        incr next_id;
+        let (x1, y1, x2, y2) =
+          if is_h then
+            let cy = y +. cum.(ci) *. h in
+            (x, cy, x +. w, cy)
+          else
+            let cx = x +. cum.(ci) *. w in
+            (cx, y, cx, y +. h)
+        in
+        segments := {
+          seg_id = id;
+          seg_path = List.rev rev_path;
+          seg_cut = cut;
+          seg_is_h = is_h;
+          seg_depth = depth;
+          seg_x1 = x1; seg_y1 = y1;
+          seg_x2 = x2; seg_y2 = y2;
+        } :: !segments
+      done;
+      List2.iteri (fun i (_, child) ->
+        if is_h then
+          let cy = y +. cum.(i) *. h in
+          let ch = (cum.(i + 1) -. cum.(i)) *. h in
+          go (i :: rev_path) x cy w ch (not is_h) (depth + 1) child
+        else
+          let cx = x +. cum.(i) *. w in
+          let cw = (cum.(i + 1) -. cum.(i)) *. w in
+          go (i :: rev_path) cx y cw h (not is_h) (depth + 1) child
+      ) children
+  in
+  go [] 0. 0. 1. 1. is_h_root 0 tree;
+  List.rev !segments
+
+let adjust_weight path cut_idx delta (is_h, tree) =
+  let min_w = 0.02 in
+  let rec go path tree =
+    match path, tree with
+    | [], Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      let w_before = fst (List.nth children_list cut_idx) in
+      let w_after = fst (List.nth children_list (cut_idx + 1)) in
+      let new_before = w_before +. delta in
+      let new_after = w_after -. delta in
+      if new_before < min_w || new_after < min_w then None
+      else
+        let new_list = List.mapi (fun i (w, c) ->
+          if i = cut_idx then (new_before, c)
+          else if i = cut_idx + 1 then (new_after, c)
+          else (w, c)
+        ) children_list in
+        (match new_list with
+         | a :: b :: rest ->
+           Some (Schrot.Frame (List2.Cons2 (a, b, rest)))
+         | _ -> None)
+    | i :: rest, Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      (match List.nth_opt children_list i with
+       | None -> None
+       | Some (_, child) ->
+         match go rest child with
+         | None -> None
+         | Some child' ->
+           let new_list = List.mapi (fun j (wj, cj) ->
+             if j = i then (wj, child') else (wj, cj)
+           ) children_list in
+           (match new_list with
+            | a :: b :: rest ->
+              Some (Schrot.Frame (List2.Cons2 (a, b, rest)))
+            | _ -> None))
+    | _, _ -> None
+  in
+  match go path tree with
+  | None -> None
+  | Some tree' -> Some (is_h, tree')
+
 (* --- Degenerate vertex detection --- *)
 
 (* Exact rational interval for a tile on a given axis under equal splits.

@@ -13,6 +13,7 @@ type t = {
 }
 
 val of_tiling : Tiling.t -> t
+val of_weighted : ?min_overlap:float -> (int, float) Schrot.tiling -> Tiling.t -> t
 val of_tiling_equal : Tiling.t -> t
 
 val rect_of : t -> int -> rect

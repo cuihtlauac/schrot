@@ -43,6 +43,24 @@ val cuts_of_weighted :
   (int, float) Schrot.tiling ->
   (float * float * float * float) list array
 
+(** {1 Segment enumeration and weight adjustment} *)
+
+type segment = {
+  seg_id : int;
+  seg_path : int list;
+  seg_cut : int;
+  seg_is_h : bool;
+  seg_depth : int;
+  seg_x1 : float; seg_y1 : float;
+  seg_x2 : float; seg_y2 : float;
+}
+
+val enumerate_segments : (int, float) Schrot.tiling -> segment list
+
+val adjust_weight :
+  int list -> int -> float ->
+  ('a, float) Schrot.tiling -> ('a, float) Schrot.tiling option
+
 (** {1 Degenerate vertex detection} *)
 
 type rational_point = { px : int; pd : int; qx : int; qd : int }
