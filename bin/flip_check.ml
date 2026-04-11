@@ -140,7 +140,11 @@ let check_properties max_n =
       else
         Printf.printf "  Property C (invertibility): FAIL (%d/%d, %d failures)\n%!"
           !prop_c_count (!prop_c_count + !prop_c_fail_count) !prop_c_fail_count;
-      (* Property D: connectivity of the D4 quotient graph *)
+      (* Property D: connectivity of the D4 quotient graph.
+         Theorem 19 (Merino-Mütze 2021, arXiv:2103.09333v2) proves a
+         Hamilton cycle exists on the flip graph for guillotine
+         rectangulations, implying connectivity for all n.  This
+         empirical check covers n <= max_n. *)
       let visited = Array.make norbits false in
       let queue = Queue.create () in
       Queue.push 0 queue;
