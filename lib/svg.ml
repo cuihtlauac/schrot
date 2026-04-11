@@ -121,10 +121,10 @@ let render_tiling_group ~x ~y ~width ~height ~margin
   let y0 = y +. margin +. (if has_dots then dot_row_h else 0.) in
   let w0 = width -. 2. *. margin in
   let h0 = height -. 2. *. margin -. (if has_dots then dot_row_h else 0.) in
-  let st = Tiling.resolve_splits tiling in
-  (* Pass 1: tile backgrounds from resolved split tree *)
+  let wt = Tiling.resolve_splits tiling in
+  (* Pass 1: tile backgrounds from weighted tree *)
   let _ = add in (* used below *)
-  let rects = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  let rects = Tiling.rects_of_weighted wt in
   List.iter (fun (n, (r : Tiling.rect)) ->
     let ox = x0 +. r.rx *. w0 in
     let oy = y0 +. r.ry *. h0 in
@@ -145,42 +145,16 @@ let render_tiling_group ~x ~y ~width ~height ~margin
         (if interactive then " pointer-events=\"none\"" else "") n;
     if interactive then add "</g>\n"
   ) rects;
-  (* Pass 2: collect cut lines by depth from the split tree *)
-  let lines_by_depth = Array.make (max_depth + 1) [] in
-  let rec collect_lines ox oy ow oh is_h depth = function
-    | Tiling.SLeaf _ -> ()
-    | Tiling.SFrame { pos; children } ->
-      let k = List2.length children in
-      if is_h then begin
-        for i = 1 to k - 1 do
-          let cy = oy +. pos.(i) *. oh in
-          lines_by_depth.(depth) <- (ox, cy, ox +. ow, cy) :: lines_by_depth.(depth)
-        done;
-        List2.iteri (fun i child ->
-          let cy = oy +. pos.(i) *. oh in
-          let ch = (pos.(i + 1) -. pos.(i)) *. oh in
-          collect_lines ox cy ow ch (not is_h) (depth + 1) child
-        ) children
-      end else begin
-        for i = 1 to k - 1 do
-          let cx = ox +. pos.(i) *. ow in
-          lines_by_depth.(depth) <- (cx, oy, cx, oy +. oh) :: lines_by_depth.(depth)
-        done;
-        List2.iteri (fun i child ->
-          let cx = ox +. pos.(i) *. ow in
-          let cw = (pos.(i + 1) -. pos.(i)) *. ow in
-          collect_lines cx oy cw oh (not is_h) (depth + 1) child
-        ) children
-      end
-  in
-  collect_lines x0 y0 w0 h0 (Tiling.is_h tiling) 0 st;
-  (* Draw from deepest to shallowest *)
+  (* Pass 2: cut lines by depth from the weighted tree *)
+  let lines_by_depth = Tiling.cuts_of_weighted wt in
+  (* Draw from deepest to shallowest, scaling [0,1]^2 to viewport *)
   for depth = max_depth - 1 downto 0 do
     let color = cut_color ~depth ~max_depth in
-    List.iter (fun (x1, y1, x2, y2) ->
+    List.iter (fun (lx1, ly1, lx2, ly2) ->
       addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
             stroke=\"%s\" stroke-width=\"2\"/>\n"
-        x1 y1 x2 y2 color
+        (x0 +. lx1 *. w0) (y0 +. ly1 *. h0)
+        (x0 +. lx2 *. w0) (y0 +. ly2 *. h0) color
     ) lines_by_depth.(depth)
   done;
   (* Outer border *)

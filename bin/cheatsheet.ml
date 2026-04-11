@@ -33,8 +33,8 @@ let render_tile ~x ~y ~selected ~affected tiling =
   let buf = Buffer.create 2048 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
-  let st = Tiling.resolve_splits tiling in
-  let rects = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  let wt = Tiling.resolve_splits tiling in
+  let rects = Tiling.rects_of_weighted wt in
   let x0 = x +. margin and y0 = y +. margin in
   let w0 = tile_w -. 2. *. margin and h0 = tile_h -. 2. *. margin in
   (* Tile fills *)
@@ -54,41 +54,14 @@ let render_tile ~x ~y ~selected ~affected tiling =
       (ox +. ow /. 2.) (oy +. oh /. 2.) tfill n
   ) rects;
   (* Cut lines *)
-  let tree = Tiling.tree tiling in
-  let max_depth = Schrot.height tree in
-  let lines_by_depth = Array.make (max_depth + 1) [] in
-  let rec collect ox oy ow oh is_h depth = function
-    | Tiling.SLeaf _ -> ()
-    | Tiling.SFrame { pos; children } ->
-      let k = List2.length children in
-      if is_h then begin
-        for i = 1 to k - 1 do
-          let cy = oy +. pos.(i) *. oh in
-          lines_by_depth.(depth) <- (ox, cy, ox +. ow, cy) :: lines_by_depth.(depth)
-        done;
-        List2.iteri (fun i child ->
-          let cy = oy +. pos.(i) *. oh in
-          let ch = (pos.(i + 1) -. pos.(i)) *. oh in
-          collect ox cy ow ch (not is_h) (depth + 1) child
-        ) children
-      end else begin
-        for i = 1 to k - 1 do
-          let cx = ox +. pos.(i) *. ow in
-          lines_by_depth.(depth) <- (cx, oy, cx, oy +. oh) :: lines_by_depth.(depth)
-        done;
-        List2.iteri (fun i child ->
-          let cx = ox +. pos.(i) *. ow in
-          let cw = (pos.(i + 1) -. pos.(i)) *. ow in
-          collect cx oy cw oh (not is_h) (depth + 1) child
-        ) children
-      end
-  in
-  collect x0 y0 w0 h0 (Tiling.is_h tiling) 0 st;
+  let lines_by_depth = Tiling.cuts_of_weighted wt in
+  let max_depth = Array.length lines_by_depth - 1 in
   for depth = max_depth - 1 downto 0 do
-    List.iter (fun (x1, y1, x2, y2) ->
+    List.iter (fun (lx1, ly1, lx2, ly2) ->
       addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
             stroke=\"#555\" stroke-width=\"1.5\"/>\n"
-        x1 y1 x2 y2
+        (x0 +. lx1 *. w0) (y0 +. ly1 *. h0)
+        (x0 +. lx2 *. w0) (y0 +. ly2 *. h0)
     ) lines_by_depth.(depth)
   done;
   (* Border *)
@@ -99,8 +72,8 @@ let render_tile ~x ~y ~selected ~affected tiling =
 
 (* Draw a direction arrow inside the selected tile *)
 let render_arrow ~x ~y ~selected ~dir tiling =
-  let st = Tiling.resolve_splits tiling in
-  let rects = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  let wt = Tiling.resolve_splits tiling in
+  let rects = Tiling.rects_of_weighted wt in
   let x0 = x +. margin and y0 = y +. margin in
   let w0 = tile_w -. 2. *. margin and h0 = tile_h -. 2. *. margin in
   match List.assoc_opt selected rects with

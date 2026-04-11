@@ -23,69 +23,6 @@ let render_labeled_tiling ~x ~y ~bottom_lines tiling =
   ) bottom_lines;
   Buffer.contents buf
 
-let flips_page output_dir =
-  let examples = [
-    (* Simple flip at root *)
-    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
-    (* Simple create + wall slide *)
-    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
-    (* Simple dissolve + pivot_out + pivot_in *)
-    (true, Schrot.unit_frame (List2.Cons2 (
-      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])),
-      Tile 2, [])));
-    (* Pivot_out from 3-ary + wall slide *)
-    (true, Schrot.unit_frame (List2.Cons2 (
-      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
-      Tile 3, [])));
-    (* Pivot_in from both sides *)
-    (false, Schrot.unit_frame (List2.Cons2 (Tile 0,
-      Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 2, [])), [Tile 3])));
-    (* Complex: 5-tile with multiple flip types *)
-    (true, Schrot.unit_frame (List2.Cons2 (
-      Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])),
-      Tile 3, [Tile 4])));
-  ] in
-  (* For each example, enumerate flips *)
-  let rows = List.map (fun tiling ->
-    let flips = Tiling.enumerate_flips tiling in
-    (tiling, flips)
-  ) examples in
-  let max_cols = List.fold_left (fun acc (_, flips) ->
-    max acc (1 + List.length flips)
-  ) 0 rows in
-  let cell_w = tile_w +. gap in
-  let cell_h = tile_h +. label_h +. gap in
-  let svg_w = float_of_int max_cols *. cell_w +. gap in
-  let svg_h = float_of_int (List.length rows) *. cell_h +. gap in
-  let buf = Buffer.create 8192 in
-  let add = Buffer.add_string buf in
-  let addf fmt = Printf.ksprintf add fmt in
-  addf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%g\" height=\"%g\">\n"
-    svg_w svg_h;
-  addf "<rect width=\"%g\" height=\"%g\" fill=\"white\"/>\n" svg_w svg_h;
-  List.iteri (fun row (tiling, flips) ->
-    let y = gap +. float_of_int row *. cell_h in
-    let input_s = Tiling.to_string tiling in
-    (* Original *)
-    let x0 = gap in
-    add (render_labeled_tiling ~x:x0 ~y
-      ~bottom_lines:["original"; input_s] tiling);
-    (* Each flip *)
-    List.iteri (fun col (flip, result) ->
-      let x = gap +. float_of_int (col + 1) *. cell_w in
-      let bottom_lines = [
-        Tiling.flip_to_string flip;
-        Tiling.to_string result
-      ] in
-      add (render_labeled_tiling ~x ~y ~bottom_lines result)
-    ) flips
-  ) rows;
-  add "</svg>\n";
-  let path = Printf.sprintf "%s/flips.svg" output_dir in
-  write_file path (Buffer.contents buf);
-  Printf.printf "Wrote %s (%d examples, up to %d columns)\n"
-    path (List.length rows) max_cols
-
 let label_tiling (is_h, tree) =
   let c = ref 0 in
   let rec go = function
@@ -175,5 +112,4 @@ let () =
     "--output", Arg.Set_string output_dir, "Output directory (default: svg)";
   ] (fun _ -> ()) "flip_test [--output DIR]";
   (try Sys.mkdir !output_dir 0o755 with Sys_error _ -> ());
-  flips_page !output_dir;
   counterexamples_page !output_dir

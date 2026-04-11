@@ -13,8 +13,8 @@ type t = {
 
 (* Compute tile rectangles on [0,1)² using resolved splits *)
 let compute_rects tiling =
-  let st = Tiling.resolve_splits tiling in
-  let raw = Tiling.rects_of_split_tree (Tiling.is_h tiling) st in
+  let wt = Tiling.resolve_splits tiling in
+  let raw = Tiling.rects_of_weighted wt in
   List.map (fun (n, (r : Tiling.rect)) ->
     (n, { x = r.rx; y = r.ry; w = r.rw; h = r.rh })
   ) raw

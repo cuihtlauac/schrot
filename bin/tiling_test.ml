@@ -155,58 +155,6 @@ let enum_page n cols output_dir =
   Printf.printf "Wrote %s (%d tilings, %d D4 orbits)\n"
     path count (List.length groups)
 
-(* Show split and close operations on a few tilings *)
-let operations_page output_dir =
-  let examples = [
-    (* Start with simple 2-tile tilings *)
-    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
-    (false, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])));
-    (* 3-way split *)
-    (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [Tile 2])));
-    (* Nested *)
-    (true, Schrot.unit_frame (List2.Cons2 (
-      Tile 0,
-      Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 2, [])),
-      [])));
-  ] in
-  let ops_per_example = 5 in (* before, split_h 0, split_v 0, close 0, close 1 *)
-  let cols = ops_per_example in
-  let rows = List.length examples in
-  let cell_w = tile_w +. gap in
-  let cell_h = tile_h +. label_h +. gap in
-  let svg_w = float_of_int cols *. cell_w +. gap in
-  let svg_h = float_of_int rows *. cell_h +. gap in
-  let buf = Buffer.create 4096 in
-  let add = Buffer.add_string buf in
-  let addf fmt = Printf.ksprintf add fmt in
-  addf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%g\" height=\"%g\">\n"
-    svg_w svg_h;
-  addf "<rect width=\"%g\" height=\"%g\" fill=\"white\"/>\n" svg_w svg_h;
-  List.iteri (fun row tiling ->
-    let y = gap +. float_of_int row *. cell_h in
-    let input_s = Tiling.to_string tiling in
-    let render col op result =
-      let x = gap +. float_of_int col *. cell_w in
-      let bottom_lines = [op; "in:  " ^ input_s; "out: " ^ Tiling.to_string result] in
-      add (render_labeled_tiling ~x ~y ~bottom_lines result)
-    in
-    render 0 "original" tiling;
-    let sh = Tiling.split 0 Tiling.H tiling in
-    render 1 "split 0 H" sh;
-    let sv = Tiling.split 0 Tiling.V tiling in
-    render 2 "split 0 V" sv;
-    let c0 = Tiling.close 0 tiling in
-    render 3 "close 0" c0;
-    (if Tiling.size tiling > 2 then begin
-      let c1 = Tiling.close 1 tiling in
-      render 4 "close 1" c1
-    end)
-  ) examples;
-  add "</svg>\n";
-  let path = Printf.sprintf "%s/operations.svg" output_dir in
-  write_file path (Buffer.contents buf);
-  Printf.printf "Wrote %s\n" path
-
 (* Print topology equivalence classes for each n *)
 let topology_classes max_n =
   for n = 1 to max_n do
@@ -330,5 +278,4 @@ let () =
       d4_page n !output_dir
     end
   done;
-  if !max_svg >= 1 then operations_page !output_dir;
   topology_classes !max_leaves

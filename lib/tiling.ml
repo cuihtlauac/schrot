@@ -338,7 +338,17 @@ let resolve_splits ?(max_iter = 40) tiling =
   let is_h_root = is_h tiling in
   let (_, cuts_eq) = collect_geometry is_h_root st in
   let groups = find_boundary_groups cuts_eq 1e-9 in
-  if groups = [] then st
+  let to_weighted st =
+    let rec go = function
+      | SLeaf n -> Schrot.Tile n
+      | SFrame { pos; children } ->
+        Schrot.Frame (List2.mapi (fun i child ->
+          (pos.(i + 1) -. pos.(i), go child)
+        ) children)
+    in
+    (is_h_root, go st)
+  in
+  if groups = [] then to_weighted st
   else begin
     (* For each boundary group, determine the boundary position and sort
        cuts into before-children (span_hi = boundary) then after-children
@@ -423,13 +433,75 @@ let resolve_splits ?(max_iter = 40) tiling =
       ) owner_of;
       if !max_disp < eps then converged := true
     done;
-    st
+    to_weighted st
   end
 
-(* Compute tile rectangles from a resolved split tree *)
-let rects_of_split_tree is_h_root st =
-  let (rects, _) = collect_geometry is_h_root st in
-  rects
+(* Compute tile rectangles from a weighted tiling on [0,1]^2.
+   Reconstructs cumulative positions from weights. *)
+let rects_of_weighted (is_h_root, tree) =
+  let rects = ref [] in
+  let rec go x y w h is_h = function
+    | Schrot.Tile n ->
+      rects := (n, { rx = x; ry = y; rw = w; rh = h }) :: !rects
+    | Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      let k = List.length children_list in
+      let total = List.fold_left (fun acc (wt, _) -> acc +. wt) 0. children_list in
+      let cum = Array.make (k + 1) 0. in
+      List.iteri (fun i (wt, _) ->
+        cum.(i + 1) <- cum.(i) +. wt /. total
+      ) children_list;
+      List2.iteri (fun i (_, child) ->
+        if is_h then
+          let cy = y +. cum.(i) *. h in
+          let ch = (cum.(i + 1) -. cum.(i)) *. h in
+          go x cy w ch (not is_h) child
+        else
+          let cx = x +. cum.(i) *. w in
+          let cw = (cum.(i + 1) -. cum.(i)) *. w in
+          go cx y cw h (not is_h) child
+      ) children
+  in
+  go 0. 0. 1. 1. is_h_root tree;
+  !rects
+
+(* Collect cut line segments grouped by depth from a weighted tiling.
+   Returns an array indexed by depth; each element is a list of
+   (x1, y1, x2, y2) segments in unit-square coordinates. *)
+let cuts_of_weighted (is_h_root, tree) =
+  let max_depth = Schrot.height tree in
+  let lines = Array.make (max_depth + 1) [] in
+  let rec go x y w h is_h depth = function
+    | Schrot.Tile _ -> ()
+    | Schrot.Frame children ->
+      let children_list = List2.to_list children in
+      let k = List.length children_list in
+      let total = List.fold_left (fun acc (wt, _) -> acc +. wt) 0. children_list in
+      let cum = Array.make (k + 1) 0. in
+      List.iteri (fun i (wt, _) ->
+        cum.(i + 1) <- cum.(i) +. wt /. total
+      ) children_list;
+      for i = 1 to k - 1 do
+        if is_h then
+          let cy = y +. cum.(i) *. h in
+          lines.(depth) <- (x, cy, x +. w, cy) :: lines.(depth)
+        else
+          let cx = x +. cum.(i) *. w in
+          lines.(depth) <- (cx, y, cx, y +. h) :: lines.(depth)
+      done;
+      List2.iteri (fun i (_, child) ->
+        if is_h then
+          let cy = y +. cum.(i) *. h in
+          let ch = (cum.(i + 1) -. cum.(i)) *. h in
+          go x cy w ch (not is_h) (depth + 1) child
+        else
+          let cx = x +. cum.(i) *. w in
+          let cw = (cum.(i + 1) -. cum.(i)) *. w in
+          go cx y cw h (not is_h) (depth + 1) child
+      ) children
+  in
+  go 0. 0. 1. 1. is_h_root 0 tree;
+  lines
 
 (* --- Degenerate vertex detection --- *)
 
