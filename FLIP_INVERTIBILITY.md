@@ -1,0 +1,117 @@
+# Flip invertibility — two rounds of fixes and lessons learned
+
+Complete record of attempts to fix `pivot_out`/`pivot_in` invertibility (Property C), paper analysis, what worked, what didn't, and the recommended path forward.
+
+## Problem
+
+Commit `171cd50` fixed `pivot_in` to use "merge mode" per Merino-Mutze 2021 SS2.2 (inserting Tile n into an existing Frame boundary: `v(3, 2, 1)` instead of wrapping in a new sub-frame `v(3, h(2, 1))`). But `pivot_out` was not updated to reverse this, breaking Property C (invertibility) in `flip_check`. Original failure count: 1918/3335 at n=7.
+
+## Paper analysis
+
+### Merino-Mutze 2021 (arXiv:2103.09333v2)
+
+**SS2.2 -- Three flip types** (p.6, Figure 3):
+- **Wall slide**: swaps two neighboring vertices of types `|-`/`-|` or `T`/`_|_` along a wall.
+- **Simple flip**: swaps orientation of a wall separating exactly two rectangles.
+- **T-flip**: at vertex v belonging to 3 rectangles, wall w through v (halves w', w''), wall t ending at v. If w' or w'' is an edge (between exactly 2 rectangles), swap its orientation so it "merges with t."
+
+**SS3.1 -- Jumps** (p.10): Generalize all three flip types via insertion point movement. A jump changes the insertion point for exactly one rectangle.
+
+**Lemma 3** (p.10-11) -- classifies jump type by insertion point positions in I(P):
+- **(a)** q_k and q_l consecutive on a common wall -> **wall slide**
+- **(b)** q_k on last vertical wall, q_l first on next vertical wall (or symmetric horizontal) -> **simple flip**
+- **(c)** q_k on vertical wall, q_l first insertion point on next vertical wall of P, or q_k on horizontal and q_l last on previous horizontal -> **T-flip**
+
+**Critical constraint from Lemma 3(c)**: T-flips are **minimal jumps** -- there is no intermediate l with k < l < k+d such that c_l(P) is in C_n. In tree terms: the tile moves to the **immediately adjacent wall**, not across multiple walls.
+
+**Lemma 27** (p.34, Figure 22) -- the workhorse proof connecting permutation insertion order to geometric flips. Two main cases based on whether r_{n+1} is left-fixed+top-fixed vs left-fixed+top-extended. Each produces either R = R' (no change), a simple flip (case a), or a T-flip (cases b, c).
+
+### Asinowski et al. 2024 (arXiv:2402.01483v1)
+
+**SS4.5, Figure 19** (p.25) -- the 5 flip types on strong rectangulations: left-bottom pivoting, right-top pivoting, simple flip, vertical wall slide, horizontal wall slide. These are cover relations of a lattice (Theorem 22). Each has a well-defined inverse.
+
+**Proposition 9** (p.16) -- the strong poset P_s(R) is a planar 2-dimensional lattice. Implemented in the codebase as `Poset.of_geom`.
+
+**SS5.3** (p.36) -- strong guillotine enumeration recurrence S(n,l,t,r,b).
+
+## Round 1 -- Extend pivot_out, add wrap mode
+
+### Changes made
+1. `pivot_out` >=3-ary extraction: widened `len = 2` guard to `len >= 2` in `try_pivot_from_children`. The existing match arms already handled both collapse (2-ary) and shrink (>=3-ary) cases.
+2. `pivot_out_root`: new function for root boundary extraction from >=3-ary root. Creates 2-ary root with `not is_h`, `Before`/`After` placement parameter.
+3. `pivot_in_wrap`: new function wrapping child containing target m with Tile n in a new 2-ary sub-frame. Reverses 2-ary `pivot_out` extractions.
+4. All three enumerated in `enumerate_flips` alongside existing operations. Deduplication by result string handles overlaps.
+
+### Results
+- Properties A, B, D: pass at all n (unchanged)
+- Property C at n<=3: **fixed** (was failing from n=3)
+- Property C at n=4: 10 failures (down from 20)
+- Property C at n=7: 710/5015 (down from 1918/3335)
+
+### What worked
+- >=3-ary extraction correctly reverses merge/insert into >=3-ary Frames
+- Root boundary extraction with both-side placement covers insert-at-root cases
+- Wrap mode correctly reverses 2-ary extractions (the original pivot_out behavior)
+
+### What didn't work
+- The splice mechanism placed extracted tiles at the boundary of a NEW 2-element list, not adjacent to the shrunken Frame in the parent's existing child list. This changed global structure (wrapping in new root with flipped is_h) instead of making a local change.
+- `pivot_in` insert mode allowed non-minimal jumps: inserting at the far boundary of a child Frame (across multiple walls).
+
+## Round 2 -- Rewrite pivot_out, add near-boundary constraint
+
+### Changes made
+1. `try_pivot_from_children` rewritten: returns expanded child list (tile placed adjacent to shrunken Frame in parent). Eliminated the G'-wrapping pattern.
+2. `go_tree` simplified: `Splice` variant removed, always returns `Tree`.
+3. Root handler: uses `is_h` (same orientation) for multi-child expansion, `not is_h` only for singleton collapse.
+4. `pivot_in_root`: inverse of `pivot_out_root` -- dissolves 2-ary root, inserts tile into surviving child at boundary.
+5. `pivot_in` insert mode restricted to near-boundary only (Lemma 3(c) minimality): when n is before the Frame, only `first_is_m`; when n is after, only `last_is_m`.
+6. `pivot_in_wrap` Frame-child guard added then removed (was preventing valid 2-ary reversal).
+
+### Results
+- Property C at n<=3: still passes
+- Property C at n=4: 9 failures
+- Property C at n=7: 1625/4209 (worse than round 1's 710/5015)
+- The parent-inline fix resolved the cx4_merge/cx4_pout cases but introduced new failures in deeper nesting
+
+### Why it got worse
+The parent-inline approach is correct for >=3-ary extraction (tile stays as sibling of shrunken Frame) but breaks for 2-ary extraction (where the Frame collapses to a single child). The collapsed child loses its Frame wrapper, so reinsertion via wrap creates a DIFFERENT nesting structure than the original. Each fix at one nesting depth creates asymmetries at other depths.
+
+## Key lessons
+
+### The fundamental mismatch
+The tree operations (`pivot_in`/`pivot_out`) are defined structurally (boundary children, Frame nesting, splice mechanics), while valid T-flips are defined geometrically (at vertices of the rectangulation). These don't correspond one-to-one:
+
+- A single tree operation can cross multiple geometric walls (non-minimal jump per Lemma 3)
+- The same geometric T-flip can require different tree operations depending on the nesting depth where the relevant vertex occurs
+- 2-ary Frame collapse/creation interacts with orientation flipping (`not is_h`) in ways that break forward/reverse symmetry
+- The `to_string` representation alternates orientation by depth, so the same tree structure prints differently depending on its position in the tree
+
+### The near-boundary insight from Lemma 3
+The most valuable theoretical insight: **valid T-flips only move tiles to the immediately adjacent wall**. In tree terms, this means:
+- `pivot_in` insert should only insert at the near boundary (the side of the child Frame facing Tile n)
+- `pivot_out` should only extract from a boundary position and place the tile adjacent to the Frame it came from
+
+This insight correctly eliminated some invalid operations (far-boundary inserts), but couldn't resolve the structural mismatch at other nesting levels.
+
+### The TDD approach works for diagnosis but not for convergence
+The test-driven loop (add counterexample -> fix -> check -> iterate) was excellent for understanding the problem and for making incremental progress. But the incremental approach hit diminishing returns because each structural fix creates new asymmetries. The problem requires a different architecture, not more patches.
+
+## Recommended path forward
+
+Implement T-flips directly from the geometric representation (`Geom.t`), bypassing the tree-structural approach entirely:
+
+1. Compute tile rectangles via `resolve_splits` (already exists)
+2. Enumerate T-joints in the geometric layout (extend `degenerate_corners` or similar)
+3. At each T-joint, identify the edge (w' or w'') and the wall (t) per SS2.2
+4. Apply the rotation: swap the edge's orientation to merge with t
+5. Reconstruct the Schroder tree from the modified geometry
+
+This approach uses geometry as the authoritative definition of valid flips, matching the papers exactly. The existing `Geom.of_tiling`, `degenerate_corners`, and `tabstop_all_adjacencies` infrastructure provides the starting point. The tree reconstruction step is the main new work -- essentially inverting `resolve_splits`.
+
+## Test infrastructure
+
+- `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
+- `bin/flip_check.ml`: exhaustive model checker for properties A-D. D4 orbit reduction. Outputs counterexamples in `(tiling_str, flip_str, property)` format for `flip_unit.ml`.
+- `bin/flip_test.ml`: collects counterexamples, generates SVG visualization.
+
+**Testing workflow**: (1) add smallest failing case from `flip_check` as unit test, (2) implement fix, (3) run `flip_unit.exe`, (4) run `flip_check --max-leaves 4` (fast), (5) run `--max-leaves 7` (thorough).
