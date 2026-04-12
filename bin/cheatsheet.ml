@@ -94,13 +94,17 @@ let render_arrow ~x ~y ~selected ~dir tiling =
       (cx -. dx *. 0.6) (cy -. dy *. 0.6) (cx +. dx *. 0.8) (cy +. dy *. 0.8);
     Buffer.contents buf
 
-(* One row: label, before tiling, arrow, after tiling *)
-let render_row ~y ~label ~sublabel ~selected ~affected ~dir ~before ~after =
+(* One cell: label, before tiling, arrow, after tiling *)
+let label_w = 120.
+let cell_w = label_w +. tile_w +. arrow_gap +. tile_w
+let col_gap = 20.
+
+let render_cell ~x ~y ~label ~sublabel ~selected ~affected ~dir ~before ~after =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
-  let lx = gap in
-  let bx = 130. in
+  let lx = x in
+  let bx = x +. label_w in
   let ax = bx +. tile_w in
   let rx = ax +. arrow_gap in
   (* Row label *)
@@ -164,52 +168,41 @@ let () =
 
   let apply f = match f t with Some t' -> t' | None -> t in
 
-  let rows = [
-    (* Split: split tile 3 to the right (V, After) *)
-    ("Split", "Alt+Right on 3",
-     3, [7],
-     Some `Right,
-     t, Tiling.split 3 Tiling.V t);
+  (* Grid layout: 2 columns, 4 rows.
+     Row 0: Split, Close
+     Row 1: 2-subframe, Dissolve
+     Row 2: Enter, Exit
+     Row 3: Slide *)
+  let grid = [|
+    [| Some ("Split", "",
+             3, [7], Some `Right,
+             t, Tiling.split 3 Tiling.V t);
+       Some ("Close", "",
+             3, [], None,
+             t, Tiling.close 3 t) |];
 
-    (* Close: close tile 3 *)
-    ("Close", "Alt+Del on 3",
-     3, [],
-     None,
-     t, Tiling.close 3 t);
+    [| Some ("2-subframe", "sibling leaves",
+             3, [4], Some `Left,
+             t, apply (Tiling.simple_create 4 3));
+       Some ("Dissolve", "in a 2-leaf sub-frame",
+             2, [1], None,
+             t, apply (Tiling.simple_dissolve 2)) |];
 
-    (* Slide: swap tile 3 with the h(v(2,1),0) sub-frame *)
-    ("Slide", "Shift+Right on 3",
-     3, [2; 1; 0],
-     Some `Right,
-     t, apply (Tiling.wall_slide 3 0));
+    [| Some ("Enter", "next to a sub-frame",
+             3, [2], Some `Right,
+             t, apply (Tiling.pivot_in 3 2));
+       Some ("Exit", "in a nested frame",
+             2, [1], None,
+             t, apply (Tiling.pivot_out 2)) |];
 
-    (* 2-subframe: group tiles 3 and 4 into a sub-frame *)
-    ("2-subframe", "f+Left on 3",
-     3, [4],
-     Some `Left,
-     t, apply (Tiling.simple_create 4 3));
+    [| Some ("Slide", "consecutive in frame",
+             3, [2; 1; 0], Some `Right,
+             t, apply (Tiling.wall_slide 3 0));
+       None |];
+  |] in
 
-    (* Enter: push tile 3 into h(v(2,1), 0), pairing with tile 2 *)
-    ("Enter", "e+Right on 3",
-     3, [2],
-     Some `Right,
-     t, apply (Tiling.pivot_in 3 2));
-
-    (* Exit: extract tile 2 from v(2,1) *)
-    ("Exit", "x on 2",
-     2, [1],
-     None,
-     t, apply (Tiling.pivot_out 2));
-
-    (* Dissolve: dissolve v(2,1) pair *)
-    ("Dissolve", "d on 2",
-     2, [1],
-     None,
-     t, apply (Tiling.simple_dissolve 2));
-  ] in
-
-  let nrows = List.length rows in
-  let total_w = 130. +. tile_w +. arrow_gap +. tile_w +. gap in
+  let nrows = Array.length grid in
+  let total_w = gap +. 2. *. cell_w +. col_gap +. gap in
   let total_h = float_of_int nrows *. row_h +. gap in
 
   let buf = Buffer.create 16384 in
@@ -223,10 +216,17 @@ let () =
        refX=\"7\" refY=\"3\" orient=\"auto\"><polygon points=\"0 0, 8 3, 0 6\" \
        fill=\"white\"/></marker></defs>\n";
 
-  List.iteri (fun i (label, sublabel, selected, affected, dir, before, after) ->
-    let y = gap +. float_of_int i *. row_h in
-    add (render_row ~y ~label ~sublabel ~selected ~affected ~dir ~before ~after)
-  ) rows;
+  Array.iteri (fun row cols ->
+    let y = gap +. float_of_int row *. row_h in
+    Array.iteri (fun col cell ->
+      match cell with
+      | None -> ()
+      | Some (label, sublabel, selected, affected, dir, before, after) ->
+        let x = gap +. float_of_int col *. (cell_w +. col_gap) in
+        add (render_cell ~x ~y ~label ~sublabel ~selected ~affected ~dir
+               ~before ~after)
+    ) cols
+  ) grid;
 
   (* Legend *)
   let ly = total_h -. 20. in

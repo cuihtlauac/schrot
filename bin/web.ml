@@ -202,6 +202,97 @@ let arrow_of_string s : Tiling.arrow option = match s with
   | "down"  -> Some Down
   | _ -> None
 
+(* Find the segment on a given side of a tile. *)
+let segment_of_tile tile_id (arrow : Tiling.arrow) =
+  let eps = 1e-6 in
+  let rects = Tiling.rects_of_weighted state.weighted in
+  match List.assoc_opt tile_id rects with
+  | None -> None
+  | Some r ->
+    let candidates = List.filter (fun (s : Tiling.segment) ->
+      match arrow with
+      | Up ->
+        s.seg_is_h
+        && abs_float (s.seg_y1 -. r.ry) < eps
+        && min s.seg_x2 (r.rx +. r.rw) -. max s.seg_x1 r.rx > eps
+      | Down ->
+        s.seg_is_h
+        && abs_float (s.seg_y1 -. (r.ry +. r.rh)) < eps
+        && min s.seg_x2 (r.rx +. r.rw) -. max s.seg_x1 r.rx > eps
+      | Left ->
+        not s.seg_is_h
+        && abs_float (s.seg_x1 -. r.rx) < eps
+        && min s.seg_y2 (r.ry +. r.rh) -. max s.seg_y1 r.ry > eps
+      | Right ->
+        not s.seg_is_h
+        && abs_float (s.seg_x1 -. (r.rx +. r.rw)) < eps
+        && min s.seg_y2 (r.ry +. r.rh) -. max s.seg_y1 r.ry > eps
+    ) state.segments in
+    match candidates with
+    | [] -> None
+    | _ ->
+      Some (List.fold_left (fun acc (s : Tiling.segment) ->
+        if s.seg_depth < acc.Tiling.seg_depth then s else acc
+      ) (List.hd candidates) candidates)
+
+(* Find the perpendicular segment at the endpoint of the current segment
+   in the arrow direction.  For a horizontal segment, right/left look at the
+   right/left endpoint; for vertical, down/up look at the bottom/top endpoint.
+   Returns None at the outer boundary. *)
+let adjacent_segment (seg : Tiling.segment) (arrow : Tiling.arrow) =
+  let eps = 1e-6 in
+  let (px, py) = match arrow with
+    | Right -> (seg.seg_x2, seg.seg_y1)
+    | Left  -> (seg.seg_x1, seg.seg_y1)
+    | Down  -> (seg.seg_x1, seg.seg_y2)
+    | Up    -> (seg.seg_x1, seg.seg_y1)
+  in
+  List.find_opt (fun (s : Tiling.segment) ->
+    s.seg_is_h <> seg.seg_is_h
+    && if s.seg_is_h then
+         abs_float (s.seg_y1 -. py) < eps
+         && s.seg_x1 <= px +. eps && s.seg_x2 >= px -. eps
+       else
+         abs_float (s.seg_x1 -. px) < eps
+         && s.seg_y1 <= py +. eps && s.seg_y2 >= py -. eps
+  ) state.segments
+
+(* Find the tile on a given side of a segment (leftmost/topmost if several). *)
+let tile_of_segment (seg : Tiling.segment) (arrow : Tiling.arrow) =
+  let eps = 1e-6 in
+  let is_perp = match arrow with
+    | Up | Down -> seg.seg_is_h
+    | Left | Right -> not seg.seg_is_h
+  in
+  if not is_perp then None
+  else
+    let rects = Tiling.rects_of_weighted state.weighted in
+    let candidates = List.filter_map (fun (n, (r : Tiling.rect)) ->
+      let on_side = match arrow with
+        | Up ->
+          abs_float ((r.ry +. r.rh) -. seg.seg_y1) < eps
+          && min seg.seg_x2 (r.rx +. r.rw) -. max seg.seg_x1 r.rx > eps
+        | Down ->
+          abs_float (r.ry -. seg.seg_y1) < eps
+          && min seg.seg_x2 (r.rx +. r.rw) -. max seg.seg_x1 r.rx > eps
+        | Left ->
+          abs_float ((r.rx +. r.rw) -. seg.seg_x1) < eps
+          && min seg.seg_y2 (r.ry +. r.rh) -. max seg.seg_y1 r.ry > eps
+        | Right ->
+          abs_float (r.rx -. seg.seg_x1) < eps
+          && min seg.seg_y2 (r.ry +. r.rh) -. max seg.seg_y1 r.ry > eps
+      in
+      if on_side then Some (n, r) else None
+    ) rects in
+    match candidates with
+    | [] -> None
+    | _ ->
+      let sorted = List.sort (fun (_, r1) (_, r2) ->
+        if seg.seg_is_h then compare r1.Tiling.rx r2.Tiling.rx
+        else compare r1.Tiling.ry r2.Tiling.ry
+      ) candidates in
+      Some (fst (List.hd sorted))
+
 let html_page = {|<!DOCTYPE html>
 <html>
 <head>
@@ -269,10 +360,10 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
 <div class="help">
   Click tile to select &middot;
   Click cut to select segment &middot;
-  Arrows navigate / slide segment &middot;
+  Arrows toggle tile&harr;segment &middot;
+  <kbd>Shift</kbd>+Arrow slide segment / wall slide &middot;
   <kbd>Alt</kbd>+Arrow split &middot;
   <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
-  <kbd>Shift</kbd>+Arrow wall slide &middot;
   <kbd>d</kbd> dissolve &middot;
   <kbd>x</kbd> exit frame &middot;
   <kbd>f</kbd>+Arrow 2-subframe &middot;
@@ -349,6 +440,8 @@ function updateDisplay(data) {
 
   if (data.selected !== null && data.selected !== undefined) {
     selectedTile = data.selected;
+  } else {
+    selectedTile = null;
   }
   if (data.selected_segment !== null && data.selected_segment !== undefined) {
     selectedSegment = data.selected_segment;
@@ -431,7 +524,7 @@ document.getElementById('copy').addEventListener('click', () => {
 function updateMode() {
   const el = document.getElementById('mode');
   if (selectedSegment !== null) {
-    el.textContent = 'segment ' + selectedSegment + ' — arrows slide';
+    el.textContent = 'segment ' + selectedSegment + ' — arrows select tile, shift+arrows slide';
     el.style.color = '#f0c040';
   } else if (pendingMode) {
     el.textContent = pendingMode + ' \u2192 arrow';
@@ -462,10 +555,15 @@ document.addEventListener('keydown', (e) => {
   const dir = { ArrowLeft: 'left', ArrowRight: 'right',
                  ArrowUp: 'up', ArrowDown: 'down' }[e.key];
 
-  // Segment mode: arrows slide the selected segment
+  // Segment mode: shift+arrow slides, plain arrow selects tile on that side
   if (selectedSegment !== null && dir) {
     e.preventDefault();
-    slideSegment(selectedSegment, dir);
+    if (e.shiftKey) {
+      slideSegment(selectedSegment, dir);
+    } else {
+      api('POST', '/api/tile_of_segment', { id: String(selectedSegment), dir })
+        .then(data => updateDisplay(data));
+    }
     return;
   }
 
@@ -500,16 +598,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'f') { e.preventDefault(); pendingMode = 'subframe'; updateMode(); return; }
   // e: enter frame mode (then arrow)
   if (e.key === 'e') { e.preventDefault(); pendingMode = 'enter'; updateMode(); return; }
-  // Plain arrow: navigate
+  // Plain arrow: select segment on that edge of the tile
   if (dir) {
     e.preventDefault();
-    api('POST', '/api/navigate', { tile: String(selectedTile), dir })
-      .then(data => {
-        if (data.selected !== null && data.selected !== undefined) {
-          selectedTile = data.selected;
-        }
-        updateDisplay(data);
-      });
+    api('POST', '/api/segment_of_tile', { tile: String(selectedTile), dir })
+      .then(data => updateDisplay(data));
   }
 });
 
@@ -537,6 +630,7 @@ let () =
 
     Dream.get "/api/state" (fun req ->
       state.selected <- get_selected req;
+      if state.selected <> None then state.selected_segment <- None;
       Dream.json (state_json ()));
 
     Dream.post "/api/command" (fun req ->
@@ -677,11 +771,51 @@ let () =
         | _ ->
           Dream.json ~status:`Bad_Request {|{"error":"missing tile or dir"}|}));
 
+    Dream.post "/api/segment_of_tile" (fun _req ->
+      Lwt.bind (Dream.body _req) (fun body ->
+        let tile = parse_json_field body "tile" in
+        let dir = Option.bind (parse_json_field body "dir") arrow_of_string in
+        (match tile, dir with
+         | Some tile_s, Some arrow ->
+           let tile = int_of_string tile_s in
+           (match segment_of_tile tile arrow with
+            | Some seg ->
+              state.selected <- None;
+              state.selected_segment <- Some seg.seg_id
+            | None -> ())
+         | _ -> ());
+        Dream.json (state_json ())));
+
+    Dream.post "/api/tile_of_segment" (fun _req ->
+      Lwt.bind (Dream.body _req) (fun body ->
+        let seg_id = Option.bind (parse_json_field body "id")
+          (fun s -> try Some (int_of_string s) with _ -> None) in
+        let dir = Option.bind (parse_json_field body "dir") arrow_of_string in
+        (match seg_id, dir with
+         | Some id, Some arrow ->
+           (match List.find_opt
+              (fun (s : Tiling.segment) -> s.seg_id = id) state.segments with
+            | Some seg ->
+              (match tile_of_segment seg arrow with
+               | Some tile_id ->
+                 state.selected <- Some tile_id;
+                 state.selected_segment <- None
+               | None ->
+                 (* Parallel arrow: navigate to segment at nearest T-junction *)
+                 (match adjacent_segment seg arrow with
+                  | Some adj ->
+                    state.selected_segment <- Some adj.seg_id
+                  | None -> ()))
+            | None -> ())
+         | _ -> ());
+        Dream.json (state_json ())));
+
     Dream.post "/api/select_segment" (fun _req ->
       Lwt.bind (Dream.body _req) (fun body ->
         let seg_id = Option.bind (parse_json_field body "id")
           (fun s -> try Some (int_of_string s) with _ -> None) in
         state.selected_segment <- seg_id;
+        if seg_id <> None then state.selected <- None;
         Dream.json (state_json ())));
 
     Dream.post "/api/slide_segment" (fun _req ->

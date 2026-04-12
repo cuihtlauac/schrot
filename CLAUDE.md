@@ -6,6 +6,18 @@ A core design constraint is that the tiling manager must be **keyboard-driven**:
 
 Schroder trees represent tiling topologies (1-to-1 correspondence with guillotine partitions). Three layers of algebraic structure govern operations: an operad (split/close between sizes), a quotientope (flips at fixed size), and a 2-dimensional lattice (geometry within a fixed tree). The project is heading toward formally verified configurable policies (visual SVG → model checking → Rocq proof).
 
+## Dirty state
+
+**`pivot_in` merge fix is half-done — `pivot_out` needs symmetric update.**
+
+`pivot_in` was fixed to match the paper's T-flip definition (Merino-Mütze 2021, §2.2): "a T-flip swaps the orientation of this edge so that it merges with t." The old wrap mode created a new 2-ary sub-frame (`v(3, h(2, 1))`) instead of inserting into the existing frame (`v(3, 2, 1)`). The new merge mode correctly inserts Tile n into the boundary of the innermost same-orientation Frame containing m.
+
+**What's broken:** `pivot_out` still uses the old extraction logic, which doesn't recognize the merge pattern as something to reverse. Result: `flip_check` property C (invertibility) fails massively (e.g., 1918/3335 failures at n=7). Properties A (size preservation), B (validity), and D (connectivity) all still pass.
+
+**What needs to happen:** `pivot_out` must be updated to reverse the merge: when Tile n is a boundary child of a Frame F inside a Frame G, and removing n from F would leave F valid (≥2 children), extract n from F and place it as a sibling of G in the parent. This is the inverse of the merge insertion.
+
+**Verification:** After fixing `pivot_out`, run `dune exec bin/flip_check.exe -- --max-leaves 7` and confirm all four properties pass.
+
 ## Build
 
 ```sh
@@ -41,7 +53,7 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `lib/poset.ml` — Adjacency poset as a 2-dimensional lattice (Asinowski et al. 2024, Prop. 9). `Poset.t` holds two rank maps (linear extensions of P_a) whose intersection is the partial order. `of_adjacency` (from explicit rects + edges), `of_geom` (from `Geom.t`), `compare`, `is_covering`, `coverings`, `minimum`, `maximum`. Poset direction: `a < b` means a is left-of or below b.
 - `bin/poset_check.ml` — Verifies poset encoding: (A) every geometric edge is comparable, (B) every covering is a geometric edge, (C) antisymmetry, (D) extrema exist. Verified up to n=8 (10,879 tilings).
 - `bin/flip_test.ml` — Collects non-invertible flip counterexamples. Generates `svg/flip_counterexamples.svg` when any are found.
-- `bin/flip_check.ml` — Model checker for flip properties: (A) size preservation, (B) validity, (C) invertibility, (D) connectivity. Verified A/B/D up to n=7 (1806 tilings). C: ~40% directly invertible; the rest are multi-level pivots. Property D (connectivity of the D4-quotient flip graph) is a consequence of Theorem 19 in Merino-Mütze 2021, which proves a Hamilton cycle exists on the full flip graph for guillotine rectangulations. The paper's 3 jump types (W-jump = wall slide, S-jump = simple flip, T-jump = T-flip) correspond to the 5 atomic flips (`wall_slide`, `simple_dissolve`/`simple_create`, `pivot_out`/`pivot_in`).
+- `bin/flip_check.ml` — Model checker for flip properties: (A) size preservation, (B) validity, (C) invertibility, (D) connectivity. A/B/D verified up to n=7 (1806 tilings). **C (invertibility) is currently broken** — see Dirty State below. Property D (connectivity of the D4-quotient flip graph) is a consequence of Theorem 19 in Merino-Mütze 2021, which proves a Hamilton cycle exists on the full flip graph for guillotine rectangulations. The paper's 3 jump types (W-jump = wall slide, S-jump = simple flip, T-jump = T-flip) correspond to the 5 atomic flips (`wall_slide`, `simple_dissolve`/`simple_create`, `pivot_out`/`pivot_in`).
 - `bin/strong_check.ml` — Model checker for strong guillotine counting. Three methods cross-validated: (1) cross-junction Σ 2^k, (2) Σ multiplicity(T) via boundary-tile formula, (3) §5.3 recurrence. Also: non-generic strong guillotine counting via Delannoy numbers D(a,b) and full enumeration. D4-reduced counting for both generic and non-generic. Verified up to n=8 (8558 weak, 21434 generic strong / 2800 D4, 39638 non-generic strong / 5143 D4).
 - `lib/checker.ml` — Generic exhaustive model checker on Schroder tilings. Property combinators (`conj`, `disj`, `imply`, `neg`, `for_all_tiles`, `for_all_dirs`). Enumeration modes: `All_tilings`, `Orbit_representatives` (D4 reduction), `Progressive` (orbit-first, then all). Counterexample shrinking via `close`. Witness finding. Each topology checked under one canonical labeling (structural properties only; see `.mli` for labeling model).
 - `bin/checker_test.ml` — Smoke tests for the Checker library: close-decrements-size, split-increments-size, expected failure, collect-all mode, shrinking, witness finding, imply/skip.
@@ -63,7 +75,7 @@ This layer is functional but frozen. It operates on binary `Term.t` trees with f
 - `bin/test_svg.ml` — Visual test suite generator. One file per policy per category.
 - `bin/model_check.ml` — Exhaustive checker: enumerates all trees up to k leaves, checks every command against policy predicates.
 - `bin/reachability.ml` — SCC analysis of the state graph under move operations.
-- `bin/web.ml` — Browser prototype (Dream server). Uses Schroder tilings for rendering but legacy Command/Rewrite for operations.
+- `bin/web.ml` — Browser prototype (Dream server on port 8080). Schroder tilings with split/close/flip operations, segment sliding, adjacency poset display. Two-mode keyboard navigation: arrows toggle focus between tiles and segments; Shift+arrows slide segments or wall-slide tiles. Segment focus: perpendicular arrow selects tile on that side (leftmost/topmost if several); parallel arrow navigates to the perpendicular segment at the endpoint. See help bar in-page for full keybindings.
 
 ## Schroder tree model
 
@@ -227,7 +239,7 @@ In the codebase: `Tiling.split` and `Tiling.close` implement these directly on S
 
 Flips preserve size. They are the cover relations of the lattice on SR_n: every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join. The polytope structure guarantees connectivity (any tiling can reach any other through a sequence of flips) and rules out dead ends.
 
-In the codebase: `simple_dissolve`/`simple_create` (simple flip: dissolve or create a 2-ary all-Tile sub-frame), `pivot_out`/`pivot_in` (pivot: extract or insert a boundary leaf across Frame levels, with merge-into-context for alternation), `wall_slide` (swap two consecutive children). `enumerate_flips` generates all applicable flips for a tiling. Verified: size preservation, validity, and flip graph connectivity up to n=7. See also `lib/rewrite.ml` TODO for the legacy binary layer these replace.
+In the codebase: `simple_dissolve`/`simple_create` (simple flip: dissolve or create a 2-ary all-Tile sub-frame), `pivot_out`/`pivot_in` (pivot: extract or insert a boundary leaf across Frame levels, with merge-into-context for alternation), `wall_slide` (swap two consecutive children). `enumerate_flips` generates all applicable flips for a tiling. Verified: size preservation, validity, and flip graph connectivity up to n=7. **Invertibility (property C) is currently broken** — see Dirty State. See also `lib/rewrite.ml` TODO for the legacy binary layer these replace.
 
 ### Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
 
