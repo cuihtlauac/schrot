@@ -140,7 +140,10 @@ type flip =
 val simple_dissolve : int -> t -> t option
 val simple_create : int -> int -> t -> t option
 val pivot_out : int -> t -> t option
+val pivot_out_root : int -> side -> t -> t option
 val pivot_in : int -> int -> t -> t option
+val pivot_in_root : int -> side -> t -> t option
+val pivot_in_wrap : int -> int -> t -> t option
 val wall_slide : int -> int -> t -> t option
 val enumerate_flips : t -> (flip * t) list
 val flip_to_string : flip -> string

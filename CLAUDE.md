@@ -8,15 +8,31 @@ Schroder trees represent tiling topologies (1-to-1 correspondence with guillotin
 
 ## Dirty state
 
-**`pivot_in` merge fix is half-done — `pivot_out` needs symmetric update.**
+**Flip invertibility (Property C) partially fixed — needs geometry-based approach.**
 
-`pivot_in` was fixed to match the paper's T-flip definition (Merino-Mütze 2021, §2.2): "a T-flip swaps the orientation of this edge so that it merges with t." The old wrap mode created a new 2-ary sub-frame (`v(3, h(2, 1))`) instead of inserting into the existing frame (`v(3, 2, 1)`). The new merge mode correctly inserts Tile n into the boundary of the innermost same-orientation Frame containing m.
+Changes applied across two rounds of incremental fixing:
 
-**What's broken:** `pivot_out` still uses the old extraction logic, which doesn't recognize the merge pattern as something to reverse. Result: `flip_check` property C (invertibility) fails massively (e.g., 1918/3335 failures at n=7). Properties A (size preservation), B (validity), and D (connectivity) all still pass.
+1. **`pivot_out` ≥3-ary extraction + parent-inline**: `try_pivot_from_children` returns expanded child list (tile placed adjacent to shrunken Frame in parent). Root handler uses `is_h` (same orientation) for multi-child, `not is_h` for singleton collapse. Eliminates the old splice-into-new-root pattern.
 
-**What needs to happen:** `pivot_out` must be updated to reverse the merge: when Tile n is a boundary child of a Frame F inside a Frame G, and removing n from F would leave F valid (≥2 children), extract n from F and place it as a sibling of G in the parent. This is the inverse of the merge insertion.
+2. **`pivot_out_root`**: extracts boundary tiles from ≥3-ary root, creates 2-ary root with `not is_h`. Both `Before` and `After` placements enumerated.
 
-**Verification:** After fixing `pivot_out`, run `dune exec bin/flip_check.exe -- --max-leaves 7` and confirm all four properties pass.
+3. **`pivot_in_root`**: inverse of `pivot_out_root` — dissolves 2-ary root, inserts tile into surviving child at boundary.
+
+4. **`pivot_in_wrap`**: wraps a child containing target `m` with Tile `n` in a new 2-ary sub-frame. Reverses 2-ary `pivot_out` extractions.
+
+5. **`pivot_in` insert near-boundary constraint**: insert mode only inserts at the boundary of the child Frame facing Tile n (per Merino-Mütze Lemma 3(c) minimal jump condition). Far-boundary inserts are blocked.
+
+**Current state:** Properties A (size), B (validity), D (connectivity) pass at all n. Property C passes through n=3. At n=4: 9 failures. At n=7: 1625/4209.
+
+**Diagnosis:** Two rounds of incremental tree-based patching have shown diminishing returns. Each fix that resolves one class of failures (e.g., parent-inline for ≥3-ary) creates new asymmetries at other nesting depths. The fundamental problem: the tree operations are defined structurally (boundary children, Frame nesting) while valid T-flips are defined geometrically (at vertices of the rectangulation). These don't correspond one-to-one because:
+
+- A single tree operation can cross multiple geometric walls (non-minimal jump)
+- The same geometric T-flip can be achieved by different tree operations depending on nesting structure
+- 2-ary Frame collapse/creation interacts with orientation flipping in ways that break the symmetry between forward and reverse operations
+
+**Recommended next approach:** Implement T-flips directly from the geometric representation (`Geom.t` from `resolve_splits`), using the paper's vertex-based definition. Enumerate T-joints in the geometric layout, apply the rotation at each joint, and reconstruct the tree. This bypasses the structural asymmetries entirely. The existing `Geom.of_tiling` and `degenerate_corners` infrastructure provides the starting point.
+
+**Verification:** `dune exec bin/flip_check.exe -- --max-leaves 7`
 
 ## Build
 
