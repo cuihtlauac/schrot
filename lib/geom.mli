@@ -21,6 +21,37 @@ val center_of : t -> int -> float * float
 val edges : t -> (int * int) list
 val neighbors : t -> int -> int list
 
+(** {1 T-joint enumeration} *)
+
+type corner = NW | NE | SW | SE
+
+(** A T-joint: a vertex where exactly 3 tile closures meet.
+    A wall [t] terminates at a through-wall [w], splitting [w] into
+    sub-walls [w'] and [w''].  The {b bar tile} spans across [t] on one
+    side of [w]; the two {b stem tiles} are separated by [t] on the other
+    side.  [through_h] is the orientation of [w]. *)
+type t_joint = {
+  jx : float;
+  jy : float;
+  bar_tile : int;
+  stem_tiles : int * int;
+  stem_corners : corner * corner;
+  through_h : bool;
+}
+
+val t_joints : ?eps:float -> t -> t_joint list
+(** Enumerate T-joints in the resolved geometry.  Works on floating-point
+    rectangles from {!of_tiling} (which uses [resolve_splits]).
+    Cross junctions (multiplicity 4) are excluded. *)
+
+val subwall_simplicity : ?eps:float -> t -> (t_joint * bool * bool) list
+(** For each T-joint (same order as {!t_joints}), whether the sub-wall
+    toward the smaller (lo) and larger (hi) coordinate along the
+    through-wall is simple.  A sub-wall is simple iff no other T-joint
+    lies between this joint and the wall boundary on that side.
+
+    Assumes resolved geometry (from {!of_tiling}). *)
+
 (** {1 Geometry to tree reconstruction} *)
 
 (** An irreducible sub-rectangulation with no wall-to-wall cut. *)

@@ -89,6 +89,123 @@ let neighbors g n =
     else None
   ) g.adjacency
 
+(* --- T-joint enumeration --- *)
+
+type corner = NW | NE | SW | SE
+
+type t_joint = {
+  jx : float;
+  jy : float;
+  bar_tile : int;
+  stem_tiles : int * int;
+  stem_corners : corner * corner;
+  through_h : bool;
+}
+
+type touch = At_corner of corner | At_edge_h | At_edge_v
+
+let classify_touch ~eps px py r =
+  let at_left = abs_float (r.x -. px) < eps in
+  let at_right = abs_float (r.x +. r.w -. px) < eps in
+  let at_top = abs_float (r.y -. py) < eps in
+  let at_bottom = abs_float (r.y +. r.h -. py) < eps in
+  if (at_left || at_right) && (at_top || at_bottom) then
+    Some (At_corner (match at_left, at_top with
+      | true, true -> NW | false, true -> NE
+      | true, false -> SW | false, false -> SE))
+  else if at_left || at_right then Some At_edge_v
+  else if at_top || at_bottom then Some At_edge_h
+  else None
+
+let t_joints ?(eps = 1e-9) g =
+  let rects = g.rects in
+  (* 1. Collect interior corner candidates *)
+  let candidates = ref [] in
+  List.iter (fun (_, r) ->
+    List.iter (fun (x, y) ->
+      if x > eps && x < 1.0 -. eps && y > eps && y < 1.0 -. eps then
+        candidates := (x, y) :: !candidates
+    ) [(r.x, r.y); (r.x +. r.w, r.y);
+       (r.x, r.y +. r.h); (r.x +. r.w, r.y +. r.h)]
+  ) rects;
+  (* 2. Deduplicate nearby points (pairwise, not just consecutive) *)
+  let unique = List.fold_left (fun acc (x, y) ->
+    if List.exists (fun (px, py) ->
+      abs_float (x -. px) < eps && abs_float (y -. py) < eps) acc
+    then acc
+    else (x, y) :: acc
+  ) [] !candidates |> List.rev in
+  (* 3. For each point, find touching tiles and classify *)
+  List.filter_map (fun (px, py) ->
+    let touching = List.filter_map (fun (n, r) ->
+      let x_in = px >= r.x -. eps && px <= r.x +. r.w +. eps in
+      let y_in = py >= r.y -. eps && py <= r.y +. r.h +. eps in
+      if x_in && y_in then
+        match classify_touch ~eps px py r with
+        | Some t -> Some (n, t) | None -> None
+      else None
+    ) rects in
+    if List.length touching <> 3 then None
+    else
+      let corners = List.filter_map (fun (n, t) ->
+        match t with At_corner c -> Some (n, c) | _ -> None) touching in
+      let edges = List.filter_map (fun (n, t) ->
+        match t with
+        | At_edge_h -> Some (n, true)
+        | At_edge_v -> Some (n, false)
+        | _ -> None) touching in
+      match corners, edges with
+      | [(a, ca); (b, cb)], [(e, edge_is_h)] ->
+        let through_h = edge_is_h in
+        (* Order stem tiles: first closer to origin along through-wall *)
+        let sa, sca, sb, scb =
+          if through_h then
+            (* through-wall horizontal, stem vertical: order by x.
+               NE/SE corner → tile is left of stem; NW/SW → right *)
+            let a_left = (ca = NE || ca = SE) in
+            if a_left then (a, ca, b, cb) else (b, cb, a, ca)
+          else
+            (* through-wall vertical, stem horizontal: order by y.
+               SW/SE corner → tile is above stem; NW/NE → below *)
+            let a_above = (ca = SW || ca = SE) in
+            if a_above then (a, ca, b, cb) else (b, cb, a, ca)
+        in
+        Some { jx = px; jy = py; bar_tile = e;
+               stem_tiles = (sa, sb);
+               stem_corners = (sca, scb);
+               through_h }
+      | _ -> None
+  ) unique
+
+let subwall_simplicity ?(eps = 1e-9) g =
+  let joints = t_joints ~eps g in
+  let annotated = List.mapi (fun i j ->
+    let wc = if j.through_h then j.jy else j.jx in
+    let pos = if j.through_h then j.jx else j.jy in
+    (i, j, j.through_h, wc, pos)
+  ) joints in
+  let sorted = List.sort (fun (_, _, h1, c1, p1) (_, _, h2, c2, p2) ->
+    let r = compare h1 h2 in if r <> 0 then r else
+    let r = compare c1 c2 in if r <> 0 then r else
+    compare p1 p2
+  ) annotated in
+  let rec group acc cur = function
+    | [] -> List.rev (if cur = [] then acc else List.rev cur :: acc)
+    | ((_, _, h, c, _) as x) :: rest ->
+      match cur with
+      | [] -> group acc [x] rest
+      | (_, _, h', c', _) :: _ when h = h' && abs_float (c -. c') < eps ->
+        group acc (x :: cur) rest
+      | _ -> group (List.rev cur :: acc) [x] rest
+  in
+  let groups = group [] [] sorted in
+  let tagged = List.concat_map (fun grp ->
+    let n = List.length grp in
+    List.mapi (fun k (i, j, _, _, _) -> (i, j, k = 0, k = n - 1)) grp
+  ) groups in
+  let restored = List.sort (fun (i1, _, _, _) (i2, _, _, _) -> compare i1 i2) tagged in
+  List.map (fun (_, j, lo, hi) -> (j, lo, hi)) restored
+
 (* --- Geometry to tree reconstruction --- *)
 
 type block = {
