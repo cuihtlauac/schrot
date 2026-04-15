@@ -136,6 +136,7 @@ type flip =
   | Pivot_out of int
   | Pivot_in of int * int
   | Wall_slide of int * int
+  | T_flip of int * int  (** (stem_tile, bar_tile) *)
 
 val simple_dissolve : int -> t -> t option
 val simple_create : int -> int -> t -> t option

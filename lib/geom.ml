@@ -206,6 +206,48 @@ let subwall_simplicity ?(eps = 1e-9) g =
   let restored = List.sort (fun (i1, _, _, _) (i2, _, _, _) -> compare i1 i2) tagged in
   List.map (fun (_, j, lo, hi) -> (j, lo, hi)) restored
 
+(* --- Geometric T-flips --- *)
+
+type flip_side = Lo | Hi
+
+let apply_t_flip ?(eps = 1e-9) joint side g =
+  ignore eps;
+  (* Pick the stem tile for this side.
+     stem_tiles are ordered: fst = closer to origin (smaller coordinate),
+     snd = farther.  Lo = toward origin, Hi = away. *)
+  let stem_id = match side with
+    | Lo -> fst joint.stem_tiles
+    | Hi -> snd joint.stem_tiles
+  in
+  let a = List.assoc stem_id g.rects in
+  let b = List.assoc joint.bar_tile g.rects in
+  let new_a, new_b =
+    if joint.through_h then
+      (* Horizontal through-wall: A extends vertically, B shrinks horizontally *)
+      let na = { x = a.x; y = min a.y b.y; w = a.w; h = a.h +. b.h } in
+      let nb = match side with
+        | Lo -> { x = a.x +. a.w; y = b.y; w = b.w -. a.w; h = b.h }
+        | Hi -> { x = b.x;        y = b.y; w = b.w -. a.w; h = b.h }
+      in
+      (na, nb)
+    else
+      (* Vertical through-wall: A extends horizontally, B shrinks vertically *)
+      let na = { x = min a.x b.x; y = a.y; w = a.w +. b.w; h = a.h } in
+      let nb = match side with
+        | Lo -> { x = b.x; y = a.y +. a.h; w = b.w; h = b.h -. a.h }
+        | Hi -> { x = b.x; y = b.y;        w = b.w; h = b.h -. a.h }
+      in
+      (na, nb)
+  in
+  if new_b.w < eps || new_b.h < eps then None
+  else
+    let new_rects = List.map (fun (id, r) ->
+      if id = stem_id then (id, new_a)
+      else if id = joint.bar_tile then (id, new_b)
+      else (id, r)
+    ) g.rects in
+    Some new_rects
+
 (* --- Geometry to tree reconstruction --- *)
 
 type block = {
@@ -316,7 +358,7 @@ let cartesian_product lists =
 let rec decompose ~eps bbox tiles =
   match tiles with
   | [(label, _)] -> [PTile label]
-  | [] -> assert false
+  | [] -> [PBlock { block_tiles = []; block_bbox = bbox }]
   | _ ->
     let hc = h_cuts ~eps bbox tiles in
     let vc = v_cuts ~eps bbox tiles in
@@ -395,3 +437,74 @@ let tree_of_rects ?(eps = 1e-9) rects =
 
 let tree_of_geom ?eps g =
   tree_of_rects ?eps g.rects
+
+(* --- Enumerate geometric T-flips --- *)
+
+(* Core: enumerate T-flips from a rect list, using a dummy Geom.t for
+   t_joints/subwall_simplicity which only need g.rects. *)
+let t_flips_of_rects ?(eps = 1e-9) rects =
+  let g = { tiling = (false, Schrot.Tile 0);  (* dummy, unused *)
+            rects; adjacency = [] } in
+  let joints = subwall_simplicity ~eps g in
+  let results = ref [] in
+  List.iter (fun (joint, lo_simple, hi_simple) ->
+    let try_side side =
+      match apply_t_flip ~eps joint side g with
+      | None -> ()
+      | Some new_rects ->
+        (match tree_of_rects ~eps new_rects with
+         | Ok [t] ->
+           let stem_id = match side with
+             | Lo -> fst joint.stem_tiles
+             | Hi -> snd joint.stem_tiles
+           in
+           results := (Tiling.T_flip (stem_id, joint.bar_tile), t, new_rects) :: !results
+         | Ok _ | Error _ -> ())
+    in
+    if lo_simple then try_side Lo;
+    if hi_simple then try_side Hi
+  ) joints;
+  !results
+
+let enumerate_t_flips ?(eps = 1e-9) g =
+  let results = t_flips_of_rects ~eps g.rects in
+  (* Deduplicate by result *)
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t', _) ->
+    let key = Tiling.to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) (List.rev results)
+
+let enumerate_t_flips_from_rects ?(eps = 1e-9) rects =
+  (* Like enumerate_t_flips but also accepts multi-tree results from
+     tree_of_rects (cross junction ambiguity).  Used for reverse-flip
+     checks where the reverse geometry may recreate a cross junction. *)
+  let g = { tiling = (false, Schrot.Tile 0); rects; adjacency = [] } in
+  let joints = subwall_simplicity ~eps g in
+  let results = ref [] in
+  List.iter (fun (joint, lo_simple, hi_simple) ->
+    let try_side side =
+      match apply_t_flip ~eps joint side g with
+      | None -> ()
+      | Some new_rects ->
+        (match tree_of_rects ~eps new_rects with
+         | Ok trees ->
+           let stem_id = match side with
+             | Lo -> fst joint.stem_tiles
+             | Hi -> snd joint.stem_tiles
+           in
+           List.iter (fun t ->
+             results := (Tiling.T_flip (stem_id, joint.bar_tile), t) :: !results
+           ) trees
+         | Error _ -> ())
+    in
+    if lo_simple then try_side Lo;
+    if hi_simple then try_side Hi
+  ) joints;
+  let seen = Hashtbl.create 16 in
+  List.filter_map (fun (f, t) ->
+    let key = Tiling.to_string t in
+    if Hashtbl.mem seen key then None
+    else (Hashtbl.add seen key (); Some (f, t))
+  ) (List.rev !results)

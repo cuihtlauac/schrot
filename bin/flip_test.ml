@@ -30,15 +30,28 @@ let label_tiling (is_h, tree) =
     | Schrot.Frame ch -> Schrot.Frame (List2.map (fun (w, c) -> (w, go c)) ch)
   in (is_h, go tree)
 
+let all_flips t =
+  let tree_flips = Tiling.enumerate_flips t in
+  let g = Geom.of_tiling t in
+  let geom_flips = List.map (fun (f, t', _) -> (f, t'))
+    (Geom.enumerate_t_flips g) in
+  let all = tree_flips @ geom_flips in
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t') ->
+    let key = Tiling.to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) all
+
 (* Collect non-invertible flips up to max_n *)
 let collect_counterexamples max_n =
   let cases = ref [] in
   for n = 2 to max_n do
     let tilings = List.map label_tiling (Schrot.enum n) in
     List.iter (fun t ->
-      let flips = Tiling.enumerate_flips t in
+      let flips = all_flips t in
       List.iter (fun (flip, t') ->
-        let reverse = Tiling.enumerate_flips t' in
+        let reverse = all_flips t' in
         let orig_s = Tiling.to_string t in
         let found = List.exists (fun (_, t'') ->
           Tiling.to_string t'' = orig_s
@@ -46,7 +59,7 @@ let collect_counterexamples max_n =
         if not found then begin
           let t'_rel = Tiling.relabel t' in
           let t_rel = Tiling.relabel t in
-          let rev_rel = Tiling.enumerate_flips t'_rel in
+          let rev_rel = all_flips t'_rel in
           let found_rel = List.exists (fun (_, t'') ->
             Tiling.to_string t'' = Tiling.to_string t_rel
           ) rev_rel in

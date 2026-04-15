@@ -3,13 +3,26 @@
 
 let failures = ref 0
 
+let all_flips t =
+  let tree_flips = Tiling.enumerate_flips t in
+  let g = Geom.of_tiling t in
+  let geom_flips = List.map (fun (f, t', _) -> (f, t'))
+    (Geom.enumerate_t_flips g) in
+  let all = tree_flips @ geom_flips in
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t') ->
+    let key = Tiling.to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) all
+
 let assert_invertible_fn name t (apply : Tiling.t -> Tiling.t option) =
   match apply t with
   | None ->
     Printf.printf "FAIL %s: flip not applicable\n" name;
     incr failures
   | Some t' ->
-    let reverse = Tiling.enumerate_flips t' in
+    let reverse = all_flips t' in
     let original_str = Tiling.to_string t in
     let ok = List.exists (fun (_, t'') ->
       Tiling.to_string t'' = original_str
@@ -29,6 +42,7 @@ let assert_invertible name t flip =
     | Pivot_out n -> Tiling.pivot_out n
     | Pivot_in (n, m) -> Tiling.pivot_in n m
     | Wall_slide (a, b) -> Tiling.wall_slide a b
+    | T_flip _ -> fun _ -> None  (* applied via geometry, not tree ops *)
   in
   assert_invertible_fn name t apply
 

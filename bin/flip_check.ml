@@ -26,6 +26,27 @@ let rec tree_valid = function
 
 let tiling_valid (_, tree) = tree_valid tree && is_valid_labeling (false, tree)
 
+(* Combine tree-based flips with geometric T-flips.
+   Returns (flip, result_tree, new_rects option).
+   new_rects is Some for T-flips (post-flip geometry for reverse checks). *)
+let all_flips_with_rects t =
+  let tree_flips = List.map (fun (f, t') -> (f, t', None))
+    (Tiling.enumerate_flips t) in
+  let g = Geom.of_tiling t in
+  let geom_flips = List.map (fun (f, t', rects) -> (f, t', Some rects))
+    (Geom.enumerate_t_flips g) in
+  let all = tree_flips @ geom_flips in
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t', _) ->
+    let key = Tiling.to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) all
+
+(* Simple version without rects (for reverse checks, unit tests, etc.) *)
+let all_flips t =
+  List.map (fun (f, t', _) -> (f, t')) (all_flips_with_rects t)
+
 let check_properties max_n =
   let all_ok = ref true in
   let counterexamples = Buffer.create 256 in
@@ -71,8 +92,8 @@ let check_properties max_n =
       let prop_c_count = ref 0 in
       let prop_c_fail_count = ref 0 in
       Array.iteri (fun oi t ->
-        let flips = Tiling.enumerate_flips t in
-        List.iter (fun (flip, t') ->
+        let flips = all_flips_with_rects t in
+        List.iter (fun (flip, t', new_rects_opt) ->
           incr total_flips;
           (* Property A *)
           if Tiling.size t' <> n then begin
@@ -105,17 +126,25 @@ let check_properties max_n =
           in
           if not (List.mem result_orbit orbit_adj.(oi)) then
             orbit_adj.(oi) <- result_orbit :: orbit_adj.(oi);
-          (* Property C: invertibility *)
-          let reverse_flips = Tiling.enumerate_flips t' in
+          (* Property C: invertibility.
+             For T-flips, also try the reverse on the post-flip geometry
+             (new_rects) since resolve_splits may produce incompatible
+             geometry at cross junctions. *)
+          let reverse_flips = all_flips t' in
+          let extra_reverse = match new_rects_opt with
+            | None -> []
+            | Some rects -> Geom.enumerate_t_flips_from_rects rects
+          in
+          let all_reverse = reverse_flips @ extra_reverse in
           let original_str = Tiling.to_string t in
           let found_inverse = List.exists (fun (_, t'') ->
             Tiling.to_string t'' = original_str
-          ) reverse_flips in
+          ) all_reverse in
           if found_inverse then incr prop_c_count
           else begin
             let t'_rel = Tiling.relabel t' in
             let t_rel = Tiling.relabel t in
-            let rev_rel = Tiling.enumerate_flips t'_rel in
+            let rev_rel = all_flips t'_rel in
             let found_rel = List.exists (fun (_, t'') ->
               Tiling.to_string t'' = Tiling.to_string t_rel
             ) rev_rel in

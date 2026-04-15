@@ -1,5 +1,5 @@
 (executables
- (names main test_svg model_check reachability tiling_test adjacency_check topology_check conjecture_check cross_check poset_check flip_test flip_check flip_unit cheatsheet strong_check checker_test s_equiv perm_check hasse_check reconstruct_check tjoint_check)
+ (names main test_svg model_check reachability tiling_test adjacency_check topology_check conjecture_check cross_check poset_check flip_test flip_check flip_unit cheatsheet strong_check checker_test s_equiv perm_check hasse_check reconstruct_check tjoint_check tflip_debug)
  (libraries schrot))
 
 (executable

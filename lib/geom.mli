@@ -52,6 +52,26 @@ val subwall_simplicity : ?eps:float -> t -> (t_joint * bool * bool) list
 
     Assumes resolved geometry (from {!of_tiling}). *)
 
+(** {1 Geometric T-flips} *)
+
+type flip_side = Lo | Hi
+
+val apply_t_flip : ?eps:float -> t_joint -> flip_side -> t -> (int * rect) list option
+(** Apply a geometric T-flip at a T-joint.  Returns modified rect list.
+    The stem tile on the given side extends perpendicular to the through-wall,
+    absorbing the adjacent portion of the bar tile. *)
+
+val enumerate_t_flips : ?eps:float -> t -> (Tiling.flip * Tiling.t * (int * rect) list) list
+(** All valid geometric T-flips for a tiling.  Returns [(flip, result_tree,
+    new_rects)] for each valid flip.  [new_rects] is the post-flip geometry
+    (before tree reconstruction); use it for reverse-flip enumeration at
+    cross junctions where [resolve_splits] produces incompatible geometry. *)
+
+val enumerate_t_flips_from_rects :
+  ?eps:float -> (int * rect) list -> (Tiling.flip * Tiling.t) list
+(** Like {!enumerate_t_flips} but on a raw rect list (no tree needed).
+    Used for reverse-flip enumeration from post-flip geometry. *)
+
 (** {1 Geometry to tree reconstruction} *)
 
 (** An irreducible sub-rectangulation with no wall-to-wall cut. *)

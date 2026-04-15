@@ -1563,6 +1563,7 @@ type flip =
   | Pivot_out of int
   | Pivot_in of int * int  (* (tile to push, tile to pair with) *)
   | Wall_slide of int * int
+  | T_flip of int * int  (* (stem_tile, bar_tile) *)
 
 let rec contains_leaf n = function
   | Schrot.Tile k -> k = n
@@ -2097,39 +2098,7 @@ let enumerate_flips t =
         | None -> ()
     ) the_leaves
   ) the_leaves;
-  List.iter (fun n ->
-    match pivot_out n t with
-    | Some t' -> add (Pivot_out n) t'
-    | None -> ()
-  ) the_leaves;
-  List.iter (fun n ->
-    List.iter (fun place -> match pivot_out_root n place t with
-      | Some t' -> add (Pivot_out n) t'
-      | None -> ()
-    ) [Before; After]
-  ) the_leaves;
-  List.iter (fun n ->
-    List.iter (fun m ->
-      if n <> m then
-        match pivot_in n m t with
-        | Some t' -> add (Pivot_in (n, m)) t'
-        | None -> ()
-    ) the_leaves
-  ) the_leaves;
-  List.iter (fun n ->
-    List.iter (fun m ->
-      if n <> m then
-        match pivot_in_wrap n m t with
-        | Some t' -> add (Pivot_in (n, m)) t'
-        | None -> ()
-    ) the_leaves
-  ) the_leaves;
-  List.iter (fun n ->
-    List.iter (fun place -> match pivot_in_root n place t with
-      | Some t' -> add (Pivot_in (n, n)) t'
-      | None -> ()
-    ) [Before; After]
-  ) the_leaves;
+  (* pivot_out/pivot_in removed — replaced by Geom.enumerate_t_flips *)
   List.iter (fun a ->
     List.iter (fun b ->
       if a < b then
@@ -2152,6 +2121,7 @@ let flip_to_string = function
   | Pivot_out n -> Printf.sprintf "pivot_out %d" n
   | Pivot_in (n, m) -> Printf.sprintf "pivot_in %d %d" n m
   | Wall_slide (a, b) -> Printf.sprintf "slide %d %d" a b
+  | T_flip (s, b) -> Printf.sprintf "t_flip %d %d" s b
 
 (* Placeholder for future edge count oracle.
    Dedup makes site-counting unreliable (pivot_in and pivot_out can produce

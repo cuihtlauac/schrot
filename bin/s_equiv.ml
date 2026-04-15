@@ -60,7 +60,7 @@ let () =
         | Tiling.Simple_dissolve _ | Tiling.Simple_create _
         | Tiling.Wall_slide _ ->
           UF.union t_key (Tiling.to_string t')
-        | Tiling.Pivot_out _ | Tiling.Pivot_in _ -> ()
+        | Tiling.Pivot_out _ | Tiling.Pivot_in _ | Tiling.T_flip _ -> ()
       ) flips
     ) tilings;
     let s_classes = UF.count_classes keys in
@@ -83,7 +83,7 @@ let () =
         | Tiling.Simple_dissolve _ | Tiling.Simple_create _
         | Tiling.Wall_slide _ ->
           UF.union t_key (Tiling.to_string t')
-        | Tiling.Pivot_out _ | Tiling.Pivot_in _ -> ()
+        | Tiling.Pivot_out _ | Tiling.Pivot_in _ | Tiling.T_flip _ -> ()
       ) flips
     ) tilings;
     (* D4-edges *)
