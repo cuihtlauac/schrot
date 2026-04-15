@@ -46,6 +46,8 @@ dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
 dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
 dune exec bin/strong_check.exe -- --max-leaves 8 # strong guillotine counting + D4 orbits
 dune exec bin/checker_test.exe                   # smoke tests for the Checker library
+dune exec bin/equiv_check.exe -- --max-leaves 7  # verify equivalence predicates
+dune exec bin/d4_geom_counterexamples.exe -- --output svg  # D4 adjacency counterexamples
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 
@@ -59,7 +61,7 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `lib/list2.ml` — `List2.t = Cons2 of 'a * 'a * 'a list`. Lists with >= 2 elements, mirroring Stdlib.List API.
 - `lib/schrot.ml` — `Schrot.t = Tile of 'a | Frame of 'a t List2.t`. Schroder trees where internal nodes have >= 2 children. `tiling = bool * 'a t` (bool = root is H). Provides `fold`, `unfold`, `map`, `enum`.
 - `lib/tiling.ml` — Tiling operations on `int Schrot.tiling`. `dir = H | V`. Layer 1: `split`, `close`, `neighbor` (tree-based navigation). Layer 2: `simple_dissolve`, `simple_create`, `pivot_out`, `pivot_in`, `wall_slide` (the 3 atomic flip types generating the quotientope flip graph); `enumerate_flips` (all applicable flips); `flip_to_string`. Junction resolution via relaxation toward evenly spaced targets (`resolve_splits`). Tabstop extraction and potential adjacency (`tabstop_all_adjacencies`). `cut_depth` (depth of the separating cut between two tiles). D4/V4 symmetry actions and canonical forms. Degenerate vertex detection (`degenerate_corners`, `degenerate_cuts`). Cross junction enumeration: `cross_junction_tiles` (4-tile IDs per junction), `diagonal_pairs` (NW-SE / NE-SW classification), `enumerate_strong_adjacencies` (all 2^k edge sets). Graph utilities (`graphs_isomorphic`, `adjacency_fingerprint`).
-- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `rect_of`, `center_of`, `edges`, `neighbors`.
+- `lib/geom.ml` — Tiling geometry on the unit square. `Geom.t` holds tile rectangles (from `resolve_splits`) and adjacency edges (geometric, excluding point contact per Eppstein). `of_tiling`, `of_tiling_equal`, `rect_of`, `center_of`, `edges`, `neighbors`. Equivalence predicates: `is_generic` (no 4-way vertices), `weak_equivalent` (same tree shape via `tree_of_geom`), `strong_equivalent` (adjacency graph isomorphism via `graphs_isomorphic`). T-joint enumeration: `t_joints`, `subwall_simplicity`. Geometric T-flips: `apply_t_flip`, `enumerate_t_flips`. Tree reconstruction: `tree_of_rects`, `tree_of_geom`.
 - `lib/svg.ml` — SVG rendering. `render_tiling_group` (resolved splits with spectral cut colors). `render_tree_diagram` (node-link tree). `render_adjacency_graph` (planar graph from Geom.t, edges colored by `cut_depth`). Legacy `render_group`/`render`/`render_interactive` for binary Term.t (marked TODO).
 - `bin/tiling_test.ml` — Generates `svg/schroeder_N.svg` (all tilings grouped by D4 orbit), `svg/d4_schroeder_N.svg` (one representative per D4 orbit with tree + adjacency graph). Supports `--max-svg N` to skip SVG for large N.
 - `bin/adjacency_check.ml` — Verifies geometric adjacency ⊆ tabstop potential adjacency.
@@ -75,6 +77,8 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 - `bin/checker_test.ml` — Smoke tests for the Checker library: close-decrements-size, split-increments-size, expected failure, collect-all mode, shrinking, witness finding, imply/skip.
 - `bin/s_equiv.ml` — Counts S-equivalence classes (simple flips + wall slides) on guillotine tilings. Compares with D4 orbits and their join (S∧D4). Shows the two equivalences are incomparable from n=3 onward.
 - `bin/perm_check.ml` — Cross-validates `Schrot.enum` against the separable permutation bijection. Guillotine tilings biject with Av(2413, 3142) via substitution decomposition (YCCG03, ABP06a). Verifies: round-trip tree→perm→tree, pattern avoidance, injectivity, and brute-force surjection (all n! permutations filtered) up to n=7. Verified up to n=8.
+- `bin/equiv_check.ml` — Verifies equivalence predicates: (A) `is_generic (of_tiling t)` = true, (B) `is_generic (of_tiling_equal t)` = (`count_cross_junctions t = 0`), (C) `weak_equivalent` reflexivity, (D) `strong_equivalent` reflexivity, (E) different tree shapes ⇒ not weakly equivalent. Verified up to n=7.
+- `bin/d4_geom_counterexamples.ml` — Generates `svg/d4_geom_counterexamples.svg` showing D4 orbit pairs where `resolve_splits` produces non-isomorphic geometric adjacency. One counterexample per failing D4 action (rot90/rot270/flip_h/flip_v from n=6, rot180/diag_nw from n=7).
 
 ### Binary tree layer (legacy — each file marked `TODO: Bring up to Schroder tilings`)
 
@@ -145,7 +149,7 @@ Two notions of adjacency, both derived from the Schroder tree:
 
 Adjacency topology depends on split ratios. Guillotine partitions with cross junctions are not one-sided (Eppstein et al. 2009), so their adjacency graph changes with the geometry: tiles that touch at a point under one set of ratios can share a boundary segment under another. This means the tree structure alone does not determine adjacency — the split positions do.
 
-Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the diagonal is chosen deterministically by structural bias (D4-covariant).
+Geometric ⊆ tabstop. The difference is exactly the unchosen diagonals at cross junctions (degenerate vertices under equal splits). At each cross junction, the diagonal is chosen deterministically by structural bias. **Note:** the bias is not D4-covariant — see Junction resolution below.
 
 ### Adjacency poset
 
@@ -161,7 +165,7 @@ Covering relations of P_a are a subset of adjacency edges. When a < c < b transi
 
 `resolve_splits` eliminates cross junctions (4-multiplicity points under equal splits) by spreading coincident cuts at each parent boundary into evenly spaced positions. Only boundaries with actual coincidences (same position, different frames) are affected; tilings without crosses keep exact equal splits.
 
-D4-covariant structural bias: cuts are sorted by `(before_height - after_height)` — each cut moves toward its shallower side, giving the deeper subtree more room. This is invariant under D4 symmetry because subtree height is a tree property.
+Structural bias: cuts are sorted by `(before_height - after_height)` — each cut moves toward its shallower side, giving the deeper subtree more room. The bias ordering is D4-invariant (subtree height is a tree property), but the resulting adjacency is **not D4-covariant**: different D4 images of the same tree can land in different strong equivalence classes. Each tree with k cross junctions admits 2^k valid adjacencies (one per diagonal choice). D4 maps valid adjacencies to valid adjacencies, so a consistent choice exists — the bias logic simply doesn't find it. It operates on boundary groups (sets of coincident cuts at each frame boundary), and D4 transforms rearrange which cuts fall into which groups, producing different diagonal resolutions. Counterexamples appear from n=6 for rot90/rot270/flip_h/flip_v and from n=7 for rot180/diag_nw (`d4_geom_counterexamples.exe`, `svg/d4_geom_counterexamples.svg`).
 
 Relaxation: `pos += 0.3 * (target - pos)` with early exit when max displacement < 1e-6 (typically ~31 iterations).
 
@@ -276,7 +280,7 @@ In the codebase: `simple_dissolve`/`simple_create` (simple flip: dissolve or cre
 
 Segment sliding preserves the tree but changes which tiles are adjacent. At cross junctions, sliding a cut past the degenerate point switches the diagonal adjacency, changing the strong equivalence class. The two-order encoding tracks this topology change smoothly: both orders agree when all cross junctions are resolved, and diverge on incomparable pairs at unresolved junctions.
 
-In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2).
+In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. In theory, D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2). In practice, `resolve_splits` does not produce D4-covariant geometry (see Junction resolution), so the poset of a D4 image may differ from the D4 transform of the original poset. The abstract action is correct; the concrete realization via `resolve_splits` is not.
 
 ### Mapping to Hyprland user actions
 
@@ -315,7 +319,7 @@ The mathematical semantics: grow is a Layer 3 operation parameterized by a Layer
 
 ### Connections between layers
 
-- D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders).
+- D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders). The action is well-defined abstractly; the concrete realization via `resolve_splits` is not D4-covariant at Layer 3 (see Junction resolution).
 - The tiling algebra (Zeidler et al. 2017) provides the specification language (`|` beside, `/` stacked, tabstops as shared constraint variables). Split and close are the algebra's introduction and elimination rules; flips are its equational theory.
 - The three layers suggest a three-level verification strategy: visual SVG (all layers), model checking (layers 1-2), Rocq proof (all layers, with the tiebreaker correctness and lattice morphism questions as proof obligations).
 

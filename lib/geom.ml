@@ -117,8 +117,9 @@ let classify_touch ~eps px py r =
   else if at_top || at_bottom then Some At_edge_h
   else None
 
-let t_joints ?(eps = 1e-9) g =
-  let rects = g.rects in
+(* Interior vertex enumeration: for each deduplicated interior vertex,
+   returns (px, py, touching) where touching = [(tile_id, touch_kind); ...]. *)
+let interior_vertices ~eps rects =
   (* 1. Collect interior corner candidates *)
   let candidates = ref [] in
   List.iter (fun (_, r) ->
@@ -145,6 +146,13 @@ let t_joints ?(eps = 1e-9) g =
         | Some t -> Some (n, t) | None -> None
       else None
     ) rects in
+    if touching = [] then None
+    else Some (px, py, touching)
+  ) unique
+
+let t_joints ?(eps = 1e-9) g =
+  let verts = interior_vertices ~eps g.rects in
+  List.filter_map (fun (px, py, touching) ->
     if List.length touching <> 3 then None
     else
       let corners = List.filter_map (fun (n, t) ->
@@ -175,7 +183,11 @@ let t_joints ?(eps = 1e-9) g =
                stem_corners = (sca, scb);
                through_h }
       | _ -> None
-  ) unique
+  ) verts
+
+let is_generic ?(eps = 1e-9) g =
+  let verts = interior_vertices ~eps g.rects in
+  List.for_all (fun (_, _, touching) -> List.length touching <= 3) verts
 
 let subwall_simplicity ?(eps = 1e-9) g =
   let joints = t_joints ~eps g in
@@ -437,6 +449,36 @@ let tree_of_rects ?(eps = 1e-9) rects =
 
 let tree_of_geom ?eps g =
   tree_of_rects ?eps g.rects
+
+(* --- Equivalence predicates --- *)
+
+let weak_equivalent ?(eps = 1e-9) g1 g2 =
+  match tree_of_geom ~eps g1, tree_of_geom ~eps g2 with
+  | Ok trees1, Ok trees2 ->
+    let shape t =
+      let (is_h, tree) = Tiling.erase t in
+      Tiling.unit_tree_to_string is_h tree
+    in
+    let s1 = List.map shape trees1 in
+    let s2 = List.map shape trees2 in
+    List.exists (fun s -> List.mem s s2) s1
+  | _ -> false
+
+let strong_equivalent g1 g2 =
+  let n1 = List.length g1.rects and n2 = List.length g2.rects in
+  if n1 <> n2 then false
+  else
+    let normalize rects adjacency =
+      let ids = List.mapi (fun i (id, _) -> (id, i)) rects in
+      let map_id id = List.assoc id ids in
+      List.map (fun (a, b) ->
+        let a' = map_id a and b' = map_id b in
+        if a' < b' then (a', b') else (b', a')
+      ) adjacency
+    in
+    Tiling.graphs_isomorphic n1
+      (normalize g1.rects g1.adjacency)
+      (normalize g2.rects g2.adjacency)
 
 (* --- Enumerate geometric T-flips --- *)
 

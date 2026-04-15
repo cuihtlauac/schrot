@@ -52,6 +52,21 @@ val subwall_simplicity : ?eps:float -> t -> (t_joint * bool * bool) list
 
     Assumes resolved geometry (from {!of_tiling}). *)
 
+(** {1 Equivalence predicates} *)
+
+val is_generic : ?eps:float -> t -> bool
+(** A rectangulation is generic iff all interior vertices are T-joints
+    (no cross junctions / no 4-way vertices). *)
+
+val weak_equivalent : ?eps:float -> t -> t -> bool
+(** Two rectangulations are weakly equivalent iff they share at least one
+    common Schroder tree shape (ignoring tile labels and split ratios).
+    Returns [false] if either input is non-guillotine. *)
+
+val strong_equivalent : t -> t -> bool
+(** Two rectangulations are strongly equivalent iff their adjacency graphs
+    are isomorphic as abstract graphs. *)
+
 (** {1 Geometric T-flips} *)
 
 type flip_side = Lo | Hi
