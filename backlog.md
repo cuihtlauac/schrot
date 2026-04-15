@@ -44,3 +44,18 @@ tree-based `pivot_out`/`pivot_in`.
 
 Verification: `dune exec bin/flip_check.exe -- --max-leaves 7` — Property C
 (invertibility) should pass at all n. Currently 1625/4209 failures at n=7.
+
+## Future directions
+
+- **Layer 2 refinement**: pivot_in insert mode (grow Frame, inverse of pivot_out from >=3-ary). Command compiler: `neighbor` -> flip type selection -> apply. Distinguish single-cover pivots from multi-cover jumps.
+- **Layer 3 implementation**: mutable split positions, incremental `Poset.of_geom` after single-segment updates. Entry point for Hyprland border-drag resize.
+- Model checking with Schroder enumeration (fewer topologies than binary)
+- Three-level verification: visual SVG -> model checking -> Rocq proof
+- D4 orbit reduction of the paper's counting sequences (see COUNTING.md)
+- Proof obligations for Rocq: tiebreaker correctness (poset.ml), lattice morphism of split/close (open question)
+- **Operad-lattice bridge**: Aguiar-Livernet (2007) proves that operadic composition = weak order intervals for the *associative* operad (binary trees). Extending this to the Hipparchus operad would connect Layer 1 (split/close) to Layer 2 (quotientope lattice) algebraically. Related: Koszul duality of the Hipparchus operad (Loday-Vallette 2012) may give a formal dual relationship between split and close.
+- **Double-category semantics**: Baez's speculative remark (Azimuth, Dec 2022) that guillotine partitions form a double category (2-cells = subdivided rectangles) could provide a compositional semantics for tiling operations across layers. Undeveloped.
+
+### Branches
+
+- `area-preserving` — Rational split ratios (`Q.t` per node) with area-preserving rewrite rules. Reverted from main because full area preservation is too strong. May be revisited with selective preservation.
