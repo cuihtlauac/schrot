@@ -391,6 +391,98 @@ session inspecting only the report file can:
 None from the geometric-flip side.  Remaining CLAUDE.md items are
 outside Round 5's scope.
 
+## Round 6 -- Symbolic tree-level T-flip derived from geometric oracle
+
+Goal: replace the obsolete `pivot_*` functions with a single
+principled `Tiling.t_flip : stem:int -> bar:int -> side -> t -> t option`
+whose semantics are defined to match `Geom.apply_t_flip` + tree
+reconstruction.
+
+### Approach
+
+Oracle-driven design exploration:
+
+1. **Oracle** (`bin/tflip_oracle.ml`): for each orbit representative
+   at n<=6, lower to generic geometry, enumerate every valid T-flip,
+   reconstruct the post-flip tree via `Geom.tree_of_rects`.
+   Output is a Markdown catalog with structural features
+   (stem/bar paths, LCA, parent orientations and arities) and a
+   cluster summary.
+2. **Pattern classification**: 30 clusters at n<=6, grouped by
+   structural feature tuple `(bar_parent_arity, stem_parent_arity,
+   same_parent_dir, lca_is_bar_parent, root_flip)`.  Inspection of
+   the biggest clusters suggested a unified rule.
+3. **Candidate rule** -- the LCA of (stem, bar) in `t` must have
+   bar and stem_branch as adjacent siblings.  The flip rewrites
+   the LCA:
+   - flip LCA's direction;
+   - promoted subtree = first child (Lo flip) or last child (Hi
+     flip) of stem_branch.  Stem must be a descendant of promoted;
+   - rest_of_stem_branch = stem_branch with the promoted child
+     removed (collapsed to single child if arity 2);
+   - new LCA has promoted on one side and an original-direction
+     frame of (bar, rest_of_stem_branch) on the other, ordered so
+     bar preserves its relative Lo/Hi position.
+4. **Equivalence checker** (`bin/tflip_sym_check.ml`) runs the
+   candidate vs. the oracle on every valid T-flip.
+
+Key implementation subtlety: substitution of the new LCA into the
+parent tree must collapse same-orientation nestings at every level
+up, not just at the leaf.  `rebuild_through` walks the path from
+LCA to root, invoking `build_frame` (direction-aware, collapsing
+same-orient children) at each level.
+
+### Results
+
+At n<=7, the symbolic implementation matches the geometric oracle
+on **every** guillotine-producing T-flip:
+
+| n | total | match | sym=None | mismatch | anomalies (non-guillotine) |
+|---|-------|-------|----------|----------|----------------------------|
+| 3 | 2     | 2     | 0        | 0        | 0                          |
+| 4 | 14    | 14    | 0        | 0        | 0                          |
+| 5 | 68    | 67    | 0        | 0        | 1                          |
+| 6 | 352   | 333   | 0        | 0        | 19                         |
+| 7 | 1782  | 1632  | 0        | 0        | 150                        |
+
+"Anomalies" are cases where `apply_t_flip` produces a non-guillotine
+rectangulation (a windmill).  These T-flips escape the Schroder-tree
+representation; the candidate rule still produces a tree for them
+but that tree does not represent the actual post-flip geometry.  A
+production `Tiling.t_flip` must return `None` in these cases; the
+detection mechanism is deferred (see below).
+
+### What remains (Phase D / F / G of the exploration plan)
+
+- **Promote to `lib/tiling.ml`**: move the rule from
+  `bin/tflip_sym_check.ml` into a `Tiling.t_flip` function with the
+  same signature the plan called for.
+- **Non-guillotine detection**: before returning `Some t'`, verify
+  that the symbolic result matches geometry.  Options under
+  consideration:
+  - structural test at tree level (likely possible but not yet
+    characterized);
+  - round-trip via `Geom.of_tiling` + `Geom.apply_t_flip` + rect
+    equality (expensive but unambiguously correct);
+  - change enumeration path so non-guillotine cases never reach
+    `t_flip` in the first place (requires pre-filtering).
+- **Remove pivot_***: delete `pivot_in`, `pivot_out`,
+  `pivot_out_root`, `pivot_in_root`, `pivot_in_wrap` and migrate
+  `bin/flip_unit.ml`, `bin/cheatsheet.ml`, `bin/web.ml`.
+- **Restore T-flip in `Tiling.enumerate_flips`** using the symbolic
+  op directly, replacing the geometric arm currently supplied by
+  `bin/flip_check.ml`.
+
+### Verification
+
+```sh
+opam exec -- dune exec bin/tflip_oracle.exe -- --max-leaves 6 --report reports/oracle.md
+opam exec -- dune exec bin/tflip_sym_check.exe -- --max-leaves 7
+```
+
+The oracle report is the ground-truth dataset; the checker confirms
+zero mismatches on guillotine-producing flips.
+
 ## Test infrastructure
 
 - `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
