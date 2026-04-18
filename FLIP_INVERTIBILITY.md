@@ -108,10 +108,93 @@ Implement T-flips directly from the geometric representation (`Geom.t`), bypassi
 
 This approach uses geometry as the authoritative definition of valid flips, matching the papers exactly. The existing `Geom.of_tiling`, `degenerate_corners`, and `tabstop_all_adjacencies` infrastructure provides the starting point. The tree reconstruction step is the main new work -- essentially inverting `resolve_splits`.
 
+## Round 3 -- Pure-geometric PoC (`bin/geom_flip_check.ml`)
+
+To isolate the geometric flip primitive from tree-reconstruction effects,
+this PoC enumerates trees, lowers to rects via `Geom.of_tiling`, applies
+every `(t_joint, side)` with a simple sub-wall (Merino-Mütze Lemma 3
+minimality, via `Geom.subwall_simplicity`), then searches the post-flip
+geometry for any reverse T-flip whose `apply_t_flip` output
+coordinate-matches the original rects (`eps = 1e-7`).  No tree
+reconstruction, no tree-level flips.
+
+### Results
+
+| n | D4 orbits | flips | invertible | failure rate |
+|---|-----------|-------|------------|--------------|
+| 3 | 2   | 2    | 2/2       | 0%   |
+| 4 | 6   | 14   | 14/14     | 0%   |
+| 5 | 18  | 68   | 68/68     | 0%   |
+| 6 | 68  | 352  | 349/352   | 0.9% |
+| 7 | 270 | 1778 | 1746/1778 | 1.8% |
+
+For comparison: the tree-level `flip_check` reports ~38.6% Property C
+failures at n=7.  The pure-geometric formulation is ~20x better but
+still not fully invertible.
+
+### What the remaining failures tell us
+
+Smallest counterexamples at n=6 (from `geom_flip_check.exe --max-leaves 6`):
+
+- `h(v(5, h(4, 3)), v(h(2, 1), 0))` -- joint (0.667, 0.500), bar=3, stems=(2,0), Hi
+- `h(v(5, 4), 3, v(2, h(1, 0)))` -- joint (0.500, 0.333), bar=3, stems=(5,4), Lo *and* Hi
+
+In each case the forward flip returns `Some post_rects`, but the search
+over `subwall_simplicity`-filtered reverse candidates finds none whose
+`apply_t_flip` output coordinate-matches the original rects.  The most
+likely mechanisms (not yet pinned down with an SVG inspection):
+
+1. **Equal-splits placement leaks.**  `Geom.of_tiling` uses
+   `resolve_splits` (equal splits by default).  A forward flip moves one
+   wall; the resulting geometry no longer has equal splits for the
+   affected tiles.  The "correct" reverse flip geometrically exists but
+   at a coordinate that `resolve_splits` would never have produced --
+   the minimality filter, keyed off absolute coordinates, rejects it.
+
+2. **Sub-wall simplicity is too strict after a flip.**  A forward flip
+   can turn a simple sub-wall into a compound one (by adding a new
+   T-joint on the same wall), so the reverse candidate is filtered out
+   even though it's the geometric inverse.
+
+3. **Cross-junction traps.**  The filter explicitly excludes 4-way
+   vertices.  A T-flip can create a cross junction; the reverse flip
+   would have to start from that cross, which `t_joints` won't
+   enumerate.
+
+None of these are bugs in `apply_t_flip` itself -- that function is
+coordinate-exact.  They are gaps in the *enumeration* of valid reverse
+candidates.
+
+### What this means for the architecture
+
+The PoC confirms the half-truth in the Round 2 conclusion: geometric
+flips are *closer* to invertible than tree flips, but "pure geometry" is
+not automatic.  A production implementation needs either:
+
+- A **principled reverse enumerator** that does not rely on the
+  simple-sub-wall filter holding symmetrically across the flip.  For
+  each forward flip, derive the reverse joint analytically (the same
+  three tiles, swapped bar/stem assignment) rather than re-enumerating
+  T-joints in the post-flip geometry.
+- Or, accept the `resolve_splits`-induced gap and work with
+  **arbitrary-ratio splits** from the start (`of_weighted`), so that
+  the flipped geometry is still in the same coordinate regime as the
+  original.
+
+Either way, the ~1.8% failure rate at n=7 is a concrete measurement of
+the remaining obstruction, not a theoretical unknown.
+
+### Verification
+
+```sh
+opam exec -- dune exec bin/geom_flip_check.exe -- --max-leaves 7
+```
+
 ## Test infrastructure
 
 - `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
 - `bin/flip_check.ml`: exhaustive model checker for properties A-D. D4 orbit reduction. Outputs counterexamples in `(tiling_str, flip_str, property)` format for `flip_unit.ml`.
 - `bin/flip_test.ml`: collects counterexamples, generates SVG visualization.
+- `bin/geom_flip_check.ml`: pure-geometric invertibility PoC (Round 3 above).
 
 **Testing workflow**: (1) add smallest failing case from `flip_check` as unit test, (2) implement fix, (3) run `flip_unit.exe`, (4) run `flip_check --max-leaves 4` (fast), (5) run `--max-leaves 7` (thorough).

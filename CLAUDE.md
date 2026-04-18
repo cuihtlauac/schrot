@@ -6,7 +6,10 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 **Flip invertibility (Property C) broken — needs geometry-based approach.** Properties A, B, D pass at all n. Property C: 1625/4209 failures at n=7. See FLIP_INVERTIBILITY.md for full diagnosis, backlog.md for recommended next steps.
 
-**Verification:** `dune exec bin/flip_check.exe -- --max-leaves 7`
+**Pure-geometric PoC (`geom_flip_check.exe`):** invertibility in rect-coordinate space alone passes at n≤5; 3/352 failures at n=6, 32/1778 at n=7 (~1.8%). Drastically better than the tree-level 38.6%, but not a silver bullet — remaining failures involve post-flip geometries where no minimal T-flip (simple sub-wall) returns to the original rects. Likely interacts with `resolve_splits`'s equal-splits placement.
+
+**Verification:** `dune exec bin/flip_check.exe -- --max-leaves 7`  (tree + geom mixed)
+`dune exec bin/geom_flip_check.exe -- --max-leaves 7`  (geom-only PoC)
 
 ## Build
 
@@ -22,6 +25,7 @@ dune exec bin/strong_check.exe -- --max-leaves 8 # strong guillotine counting + 
 dune exec bin/checker_test.exe                   # smoke tests for the Checker library
 dune exec bin/equiv_check.exe -- --max-leaves 7  # verify equivalence predicates
 dune exec bin/d4_geom_counterexamples.exe -- --output svg  # D4 adjacency counterexamples
+dune exec bin/geom_flip_check.exe -- --max-leaves 7       # pure-geometric T-flip invertibility PoC
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 
