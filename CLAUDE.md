@@ -4,12 +4,12 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 ## Dirty state
 
-**Flip invertibility (Property C) broken — needs geometry-based approach.** Properties A, B, D pass at all n. Property C: 1625/4209 failures at n=7. See FLIP_INVERTIBILITY.md for full diagnosis, backlog.md for recommended next steps.
+**Flip invertibility resolved (Round 5).**  `Geom.subwall_simplicity` rewritten with an edge-match criterion (stem's far edge == bar's far edge on the flip side).  `flip_check` Property C now passes at all n tested (2942/2942 at n=7); `geom_flip_check` passes in both equal-splits and generic-weight modes up to n=12 (8.9M flips).  See FLIP_INVERTIBILITY.md Round 5 for the fix rationale.
 
-**Pure-geometric PoC (`geom_flip_check.exe`):** diagnosis complete (Round 4 in FLIP_INVERTIBILITY.md). The paper theorem is fine; two distinct bugs in `Geom.subwall_simplicity` (lib/geom.ml:192-219) account for all residual failures: (1) sort comparator on floating-point `wc` sorts within-group by `wc`-bit-noise instead of by `pos`, inverting lo/hi tags and letting invalid forward flips through in generic-weight mode; (2) grouping doesn't split walls at cross junctions in equal-splits mode. Fixes left as follow-up.
-
-**Verification:** `dune exec bin/flip_check.exe -- --max-leaves 7`  (tree + geom mixed)
-`dune exec bin/geom_flip_check.exe -- --max-leaves 7` / `--generic`  (geom-only diagnostic)
+**Verification:**
+- `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass
+- `dune exec bin/geom_flip_check.exe -- --max-leaves 7` / `--generic`  — geom-only
+- `scripts/run_long_flip_check.sh --max-n 10`  — stress check with self-contained report under `reports/`
 
 ## Build
 
@@ -26,6 +26,7 @@ dune exec bin/checker_test.exe                   # smoke tests for the Checker l
 dune exec bin/equiv_check.exe -- --max-leaves 7  # verify equivalence predicates
 dune exec bin/d4_geom_counterexamples.exe -- --output svg  # D4 adjacency counterexamples
 dune exec bin/geom_flip_check.exe -- --max-leaves 7       # pure-geometric T-flip invertibility PoC
+scripts/run_long_flip_check.sh --max-n 10                 # long-form stress check, writes reports/*.md
 dune exec bin/web.exe                            # browser prototype at http://localhost:8080
 ```
 

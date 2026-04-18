@@ -189,38 +189,41 @@ let is_generic ?(eps = 1e-9) g =
   let verts = interior_vertices ~eps g.rects in
   List.for_all (fun (_, _, touching) -> List.length touching <= 3) verts
 
-let subwall_simplicity ?(eps = 1e-9) g =
-  let joints = t_joints ~eps g in
-  let annotated = List.mapi (fun i j ->
-    let wc = if j.through_h then j.jy else j.jx in
-    let pos = if j.through_h then j.jx else j.jy in
-    (i, j, j.through_h, wc, pos)
-  ) joints in
-  let sorted = List.sort (fun (_, _, h1, c1, p1) (_, _, h2, c2, p2) ->
-    let r = compare h1 h2 in if r <> 0 then r else
-    let r = compare c1 c2 in if r <> 0 then r else
-    compare p1 p2
-  ) annotated in
-  let rec group acc cur = function
-    | [] -> List.rev (if cur = [] then acc else List.rev cur :: acc)
-    | ((_, _, h, c, _) as x) :: rest ->
-      match cur with
-      | [] -> group acc [x] rest
-      | (_, _, h', c', _) :: _ when h = h' && abs_float (c -. c') < eps ->
-        group acc (x :: cur) rest
-      | _ -> group (List.rev cur :: acc) [x] rest
-  in
-  let groups = group [] [] sorted in
-  let tagged = List.concat_map (fun grp ->
-    let n = List.length grp in
-    List.mapi (fun k (i, j, _, _, _) -> (i, j, k = 0, k = n - 1)) grp
-  ) groups in
-  let restored = List.sort (fun (i1, _, _, _) (i2, _, _, _) -> compare i1 i2) tagged in
-  List.map (fun (_, j, lo, hi) -> (j, lo, hi)) restored
-
 (* --- Geometric T-flips --- *)
 
 type flip_side = Lo | Hi
+
+let subwall_simplicity ?(eps = 1e-9) g =
+  (* A T-flip at (j, side) is valid iff the chosen stem sits flush
+     against the bar's edge on that side: the stem grows into the bar
+     and the bar shrinks back to flush with the stem's other edge.
+     If the stem's far edge does NOT coincide with the bar's far edge,
+     then either the stem is in the middle of the bar (bar would
+     split) or the stem extends past the bar (bar residue + stem
+     overlap).  Both are invalid.  This criterion subsumes the
+     Merino-Mutze minimality condition without needing to enumerate
+     intermediate T-joints on the through-wall: any such intermediate
+     T-joint would force the stem to end at its position, breaking
+     the edge-match. *)
+  let joints = t_joints ~eps g in
+  let edges_match j side =
+    let stem_id = match side with
+      | Lo -> fst j.stem_tiles
+      | Hi -> snd j.stem_tiles in
+    let stem = List.assoc stem_id g.rects in
+    let bar = List.assoc j.bar_tile g.rects in
+    let stem_edge, bar_edge =
+      match side with
+      | Lo ->
+        if j.through_h then (stem.x, bar.x)
+        else (stem.y, bar.y)
+      | Hi ->
+        if j.through_h then (stem.x +. stem.w, bar.x +. bar.w)
+        else (stem.y +. stem.h, bar.y +. bar.h)
+    in
+    abs_float (stem_edge -. bar_edge) < eps
+  in
+  List.map (fun j -> (j, edges_match j Lo, edges_match j Hi)) joints
 
 let apply_t_flip ?(eps = 1e-9) joint side g =
   ignore eps;

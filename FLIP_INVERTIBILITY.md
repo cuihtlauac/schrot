@@ -292,6 +292,105 @@ Per-n lines report `invertible / total` and, on failure, `N
 non-generic-post, M rescued-by-bypass, K genuine`.  The decision above
 is the decisive empirical result.
 
+## Round 5 -- Fix applied and verified
+
+The diagnosis in Round 4 pointed to two defects in
+`Geom.subwall_simplicity`.  The implemented fix replaces the original
+sort-and-extremes grouping with a direct **edge-match** criterion:
+
+> A T-flip at (j, side) is valid iff the chosen stem's far edge
+> coincides with the bar's corresponding far edge on that side.
+
+In code (lib/geom.ml:192-219, post-fix):
+
+```ocaml
+let edges_match j side =
+  let stem_id = match side with
+    | Lo -> fst j.stem_tiles
+    | Hi -> snd j.stem_tiles in
+  let stem = List.assoc stem_id g.rects in
+  let bar = List.assoc j.bar_tile g.rects in
+  let stem_edge, bar_edge =
+    match side with
+    | Lo -> if j.through_h then (stem.x, bar.x) else (stem.y, bar.y)
+    | Hi -> if j.through_h then (stem.x +. stem.w, bar.x +. bar.w)
+            else (stem.y +. stem.h, bar.y +. bar.h)
+  in
+  abs_float (stem_edge -. bar_edge) < eps
+```
+
+Why this subsumes both original defects:
+
+- **FP-noise sort (Bug 1)**: no sort happens.  Each T-joint is
+  evaluated in isolation.
+- **Cross-junction wall fragmentation (Bug 2)**: the stem's rectangle
+  already reflects whatever walls end its extent (cross junctions,
+  other T-joints, boundary).  If a cross junction terminates the wall
+  before the bar's edge, the stem's edge matches the cross junction's
+  position, and the bar's edge differs — correctly rejected.  If the
+  cross junction is beyond the bar, stem and bar agree — correctly
+  accepted.
+- **Stem-past-bar / stem-mid-bar flips**: exactly the case the
+  edge-match detects.  If stem extends past bar or sits in the middle
+  of bar, stem's far edge does not equal bar's far edge, so the flip
+  is rejected.
+
+### Verification
+
+At n <= 7 (both modes, immediately after fix):
+
+```
+$ dune exec bin/geom_flip_check.exe -- --max-leaves 7
+  n=7: 1782/1782 invertible
+$ dune exec bin/geom_flip_check.exe -- --max-leaves 7 --generic
+  n=7: 1782/1782 invertible
+$ dune exec bin/flip_check.exe -- --max-leaves 7
+  n=7: 2942/2942 invertible   (Properties A, B, C, D all pass)
+```
+
+`flip_check`'s Property C — previously failing at every n >= 3 since
+the project's inception, with rates like 1625/4209 at n=7 — now
+reports OK across the board.  The tree-level `pivot_out`/`pivot_in`
+path shares `Geom.subwall_simplicity` via `Geom.enumerate_t_flips`
+(lib/geom.ml:490, 526), so the fix percolates to that test too.
+
+### Stress test at higher n
+
+The PoC was extended with a `--report PATH` flag and a wrapper script
+`scripts/run_long_flip_check.sh` that drives both modes up to
+`--max-n`.  Empirical timings on one reference machine:
+
+| n  | mode    | flips     | seconds |
+|----|---------|-----------|---------|
+| 8  | generic | 9532      | 0.09    |
+| 9  | generic | 51574     | 0.55    |
+| 10 | generic | 285230    | 3.41    |
+| 11 | generic | 1590024   | 22.28   |
+| 12 | generic | 8933570   | 142.77  |
+
+All PASS up to n=12 (8.9M forward flips, all invertible).  Runtime is
+low enough that a full n=10 run completes in seconds; the long-run
+scaffolding exists to surface failures at scale rather than to
+budget hours.
+
+### Reusing the report for later sessions
+
+Report files under `reports/geom_flip_check_<timestamp>.md` are
+`.gitignore`d and self-contained (commit sha, OCaml version, host,
+per-(n,mode) summary table, per-failure detail including pre/post
+rects, T-joint filter output, and best bypass match).  A future
+session inspecting only the report file can:
+
+- Confirm which commit produced it.
+- See which (n, mode) passed or failed.
+- Reproduce any counterexample by dropping its tiling string into
+  `bin/flip_unit.ml` without needing to re-run the check.
+
+### Residual dirty state
+
+None from the geometric-flip side.  Remaining CLAUDE.md items are
+outside Round 5's scope.
+
 ## Test infrastructure
 
 - `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
