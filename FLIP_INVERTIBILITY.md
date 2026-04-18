@@ -190,11 +190,113 @@ the remaining obstruction, not a theoretical unknown.
 opam exec -- dune exec bin/geom_flip_check.exe -- --max-leaves 7
 ```
 
+## Round 4 -- Diagnosis: codebase bug, not paper theorem
+
+The Round 3 PoC was extended with three instrumentation axes (genericity
+tracking, filter-bypass reverse search, an `--generic` flag that uses
+irrational weights via `Geom.of_weighted`) to decide whether the residual
+failures indict the paper (Merino-Mütze Theorem 19) or the codebase.
+Procedure in the plan at
+`/home/cuihtlauac/.claude/plans/dynamic-sparking-platypus.md`.
+
+### Measurements at n=7
+
+| Mode           | flips | failures | non-generic post | rescued by bypass | genuine |
+|----------------|-------|----------|------------------|-------------------|---------|
+| equal splits   | 1778  | 32       | 24               | 32                | 0       |
+| generic weights| 1781  | 67       | 0                | 59                | 8       |
+
+"Genuine" = no T-flip in the post-flip geometry restores the original
+rects, even with the simplicity filter bypassed.  The fact that *every*
+failure in equal-splits mode is rescued by bypass immediately rules out
+H1 (paper theorem false) for that mode: the valid inverse T-flip exists,
+`Geom.subwall_simplicity` just rejects it.  The generic run surfaces a
+second, distinct bug.
+
+### The two bugs in `Geom.subwall_simplicity` (lib/geom.ml:192-219)
+
+**Bug 1 -- FP noise breaks the grouping sort.**  The comparator at
+line 199-203 sorts by `(through_h, wc, pos)` with raw `compare` on
+floating-point `wc`.  Two T-joints at the same wall have `wc` values
+computed from different rect corners; with irrational weights these can
+differ in the last bit.  Example from a traced n=7 counterexample:
+- joint at (0.525, y=0.90800416805774942) — jy computed via tile 5's bottom-right corner.
+- joint at (0.783, y=0.90800416805774931) — jy computed via tile 3's bottom-right corner.
+
+Both satisfy `abs_float (c - c') < eps` in the grouping step
+(line 209) so they land in the same group — but the sort has already
+placed them in `c`-ascending order (0.931 before 0.942), not in
+`p`-ascending order (0.525 before 0.783).  The `List.mapi` tagging then
+marks the extremes of the *c*-sorted order as simple, inverting
+lo_simple/hi_simple for this group:
+
+```
+joint(0.525, 0.90800...942) ... lo_simple=false hi_simple=true   <-- should be (true, false)
+joint(0.783, 0.90800...931) ... lo_simple=true  hi_simple=false  <-- should be (false, true)
+```
+
+Consequence in generic mode: `(0.525, Hi)` is wrongly filter-passed.
+`apply_t_flip` then grows a stem at what is actually a middle sub-wall
+position, producing geometrically invalid post-flip rects (tile 3
+overlaps tile 0 from x=0.525 to x=0.742; the region x∈[0.783, 1],
+y∈[0.908, 1] has no tile).  No valid reverse exists from broken
+geometry, so bypass also fails → the 8 "genuine" failures at n=7.
+
+**Bug 2 -- Walls are not fragmented at cross junctions.**  In equal-splits
+mode a forward T-flip can create a cross junction that splits the
+through-wall into two separate walls, but the grouping keeps both
+T-joints in the same group because they share `wc` exactly.  The filter
+then wrongly rejects the sub-wall pointing through the cross junction
+as non-simple.  Result: 32 filter-blocked valid reverses at n=7,
+all rescued by bypass.
+
+### Decision
+
+**H1 (paper theorem false) is rejected.**  In equal splits every failure
+has a valid T-flip inverse that `Geom.subwall_simplicity` rejects.  In
+generic weights, the filter's FP-sort bug causes `apply_t_flip` to be
+applied at configurations where it cannot produce valid geometry; none
+of these "failures" involve a valid forward T-flip, so they do not
+refute the theorem either.
+
+**H2 (codebase bug) is confirmed, and the bug is localized to
+`subwall_simplicity` (lib/geom.ml:192-219).**  Two distinct defects,
+both in the grouping/tagging logic:
+
+1. sort by `wc` with raw `compare` violates the within-group sort-by-`pos`
+   invariant mapi relies on;
+2. grouping ignores cross junctions that fragment the wall.
+
+`Geom.apply_t_flip` itself is coordinate-exact when called on valid
+(joint, side) pairs; `Geom.t_joints` correctly enumerates 3-way vertices
+and correctly excludes 4-way vertices.
+
+### Suggested fixes (out of scope for this diagnostic)
+
+- Bug 1: sort by `(through_h, bucketed_wc, pos)` where `bucketed_wc` is
+  `wc` snapped to a canonical value per eps-bucket, e.g. the first `wc`
+  seen when scanning a pre-sorted list.  Or: after grouping, re-sort
+  each group by `pos` before tagging.
+- Bug 2: extend `interior_vertices` to return 4-way vertices too, and
+  in `subwall_simplicity` split a group at any cross junction whose
+  position falls between two consecutive T-joints' positions.
+
+### Verification
+
+```sh
+opam exec -- dune exec bin/geom_flip_check.exe -- --max-leaves 7           # equal splits
+opam exec -- dune exec bin/geom_flip_check.exe -- --max-leaves 7 --generic # generic weights
+```
+
+Per-n lines report `invertible / total` and, on failure, `N
+non-generic-post, M rescued-by-bypass, K genuine`.  The decision above
+is the decisive empirical result.
+
 ## Test infrastructure
 
 - `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
 - `bin/flip_check.ml`: exhaustive model checker for properties A-D. D4 orbit reduction. Outputs counterexamples in `(tiling_str, flip_str, property)` format for `flip_unit.ml`.
 - `bin/flip_test.ml`: collects counterexamples, generates SVG visualization.
-- `bin/geom_flip_check.ml`: pure-geometric invertibility PoC (Round 3 above).
+- `bin/geom_flip_check.ml`: pure-geometric invertibility PoC (Round 3) with genericity / bypass / `--generic` instrumentation (Round 4).
 
 **Testing workflow**: (1) add smallest failing case from `flip_check` as unit test, (2) implement fix, (3) run `flip_unit.exe`, (4) run `flip_check --max-leaves 4` (fast), (5) run `--max-leaves 7` (thorough).
