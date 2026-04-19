@@ -18,6 +18,20 @@ val max_leaf : t -> int
 val tree_to_string : bool -> (int, 'a) Schrot.t -> string
 val to_string : t -> string
 
+(** {1 Tree-walk utilities} *)
+
+val path_to_leaf : (int, 'a) Schrot.t -> int -> int list option
+(** Index path from the root of a tree to the leaf labeled [n], or
+    [None] if absent.  The empty list means [n] is the root tile.
+    When you have a {!t}, pass [tree t]. *)
+
+val lcp : 'a list -> 'a list -> 'a list
+(** Longest common prefix of two lists. *)
+
+val descend : (int, 'a) Schrot.t -> int list -> (int, 'a) Schrot.t option
+(** Descend into a tree along a path of child indices.  Returns [None]
+    if the path exits a leaf or is out of bounds. *)
+
 (** {1 Layer 1 — operad (split/close)} *)
 
 val split : ?side:side -> int -> dir -> t -> t
@@ -146,6 +160,23 @@ val pivot_in : int -> int -> t -> t option
 val pivot_in_root : int -> side -> t -> t option
 val pivot_in_wrap : int -> int -> t -> t option
 val wall_slide : int -> int -> t -> t option
+
+val apply_t_flip_symbolic : stem:int -> bar:int -> t -> t option
+(** Round 6 symbolic T-flip: LCA rewrite on the Schroder tree.
+    Applies the tree transformation assuming the (stem, bar) pair
+    names a valid Asinowski-pivoting cover relation.
+
+    Returns [None] when (stem, bar) is structurally invalid — not
+    both leaves, LCA's stem_branch is a Tile, stem is in a middle
+    child of stem_branch (arity >= 3, not the first or last), etc.
+
+    This function does NOT verify guillotine-admissibility of the
+    output.  For 150/1782 T-flip candidates at n=7 (M-M flips whose
+    post-flip geometry is a windmill), this function returns
+    [Some t'] where [t'] does not correspond to any guillotine
+    rectangulation.  Use {!Geom.t_flip} for the filtered production
+    API, or compose this with {!Geom.is_asinowski_admissible}. *)
+
 val enumerate_flips : t -> (flip * t) list
 val flip_to_string : flip -> string
 val count_flip_sites : 'a -> int

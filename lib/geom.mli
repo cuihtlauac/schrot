@@ -145,3 +145,20 @@ val is_asinowski_admissible :
 
     Additive to the existing M-M flip machinery; {!apply_t_flip} and
     {!subwall_simplicity} are unchanged. *)
+
+val t_flip : ?eps:float -> stem:int -> bar:int -> Tiling.t -> Tiling.t option
+(** Asinowski-admissible tree-level T-flip.  Returns [Some t'] iff the
+    (stem, bar) pair names a valid T-flip in the generic strong poset,
+    and [t'] is the Round 6 symbolic-LCA-rewrite of [t].  Returns
+    [None] for:
+
+    - (stem, bar) that don't map to any T-joint (e.g. not adjacent
+      across a wall, or not a stem/bar pairing),
+    - structurally invalid configurations ({!Tiling.apply_t_flip_symbolic}
+      rejects — e.g. stem is a middle child of stem_branch),
+    - geometrically valid M-M T-flips whose post-flip geometry is a
+      windmill (150/1782 at n=7, rejected by
+      {!is_asinowski_admissible}).
+
+    Internally lowers [t] with irrational split ratios so admissibility
+    reflects the generic strong poset regardless of caller geometry. *)

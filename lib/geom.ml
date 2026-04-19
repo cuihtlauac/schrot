@@ -570,3 +570,38 @@ let is_asinowski_admissible ?(eps = 1e-9) g joint side =
       let g' = { tiling = t'; rects; adjacency = [] } in
       is_generic ~eps g'
     | Ok _ | Error _ -> false
+
+(* --- Asinowski-admissible tree-level T-flip --- *)
+
+(* Weight a unit-tiling with irrational weights (1 + k*(sqrt 2 - 1),
+   k = 0, 1, ...) so [is_generic] holds on the lowered geometry —
+   no rational partial-sum coincidences.  Used by [t_flip] so its
+   admissibility test reflects the generic strong poset, independent
+   of the caller's split ratios. *)
+let weight_for_generic (is_h, tree) =
+  let counter = ref 0 in
+  let next_w () =
+    let w = 1.0 +. float_of_int !counter *. (sqrt 2.0 -. 1.0) in
+    incr counter; w
+  in
+  let rec go : (int, unit) Schrot.t -> (int, float) Schrot.t = function
+    | Schrot.Tile n -> Schrot.Tile n
+    | Schrot.Frame ch ->
+      Schrot.Frame (List2.map (fun ((), c) -> (next_w (), go c)) ch)
+  in
+  (is_h, go tree)
+
+let t_flip ?(eps = 1e-9) ~stem ~bar t =
+  let g = of_weighted (weight_for_generic t) t in
+  let joints = t_joints ~eps g in
+  let matched =
+    List.find_opt (fun (j : t_joint) ->
+      j.bar_tile = bar
+      && (stem = fst j.stem_tiles || stem = snd j.stem_tiles)) joints
+  in
+  match matched with
+  | None -> None
+  | Some joint ->
+    let side = if stem = fst joint.stem_tiles then Lo else Hi in
+    if not (is_asinowski_admissible ~eps g joint side) then None
+    else Tiling.apply_t_flip_symbolic ~stem ~bar t

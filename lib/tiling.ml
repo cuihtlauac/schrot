@@ -24,6 +24,41 @@ let rec tree_to_string is_h = function
 
 let to_string (is_h, t) = tree_to_string is_h t
 
+(* --- Tree-walk utilities --- *)
+
+(* Find the path from the root of a tree to the leaf labeled [n] as a
+   list of child indices (empty if [n] is the root tile).  Returns
+   [None] if the leaf is not present. *)
+let rec path_to_leaf tree n =
+  match tree with
+  | Schrot.Tile m -> if m = n then Some [] else None
+  | Schrot.Frame ch ->
+    let rec scan i = function
+      | [] -> None
+      | (_, c) :: rest ->
+        match path_to_leaf c n with
+        | Some p -> Some (i :: p)
+        | None -> scan (i + 1) rest
+    in
+    scan 0 (List2.to_list ch)
+
+(* Longest common prefix of two lists (polymorphic). *)
+let rec lcp a b =
+  match a, b with
+  | x :: xs, y :: ys when x = y -> x :: lcp xs ys
+  | _ -> []
+
+(* Descend into a tree along a path of child indices.  Returns [None]
+   if the path runs off a leaf or out of bounds. *)
+let rec descend tr path =
+  match path, tr with
+  | [], _ -> Some tr
+  | i :: rest, Schrot.Frame ch ->
+    (match List.nth_opt (List2.to_list ch) i with
+     | Some (_, c) -> descend c rest
+     | None -> None)
+  | _, Schrot.Tile _ -> None
+
 (* Split tile [n] in direction [dir].  (Layer 1: operad composition,
    maps SR_n -> SR_{n+1}.)
    [~side] controls whether the fresh tile goes Before or After [n].
@@ -2096,6 +2131,185 @@ let pivot_in_wrap n m t =
     | None -> None
   in
   try_mode wrap_tree
+
+(* --- Symbolic T-flip: Round 6 LCA rewrite, no admissibility check ---
+   The caller (Geom.t_flip) composes this with a guillotine-admissibility
+   filter based on Geom.is_asinowski_admissible.  In isolation, this
+   function returns Some t' even for the 150/1782 windmill cases at n=7;
+   t' is the tree predicted by the LCA rule but the corresponding
+   geometry is a windmill (non-guillotine).  Use Geom.t_flip for a
+   filtered production API. *)
+
+(* Construct a Frame at direction [my_is_h], inlining any child Frame
+   whose root direction equals my_is_h (same-orientation collapse).
+   Each child is paired with its own is_h (direction if it's a Frame;
+   Tile children carry the expected direction from context). *)
+let sym_list2_of_list = function
+  | a :: b :: rest -> List2.Cons2 (a, b, rest)
+  | _ -> failwith "sym_list2_of_list: need >= 2 elements"
+
+let sym_build_frame my_is_h (children : (bool * (int, unit) Schrot.t) list) =
+  let expanded = List.concat_map (fun (child_is_h, c) ->
+    if child_is_h = my_is_h then
+      match c with
+      | Schrot.Frame ch -> List2.to_list ch |> List.map (fun (_, gc) -> gc)
+      | Schrot.Tile _ -> [c]
+    else [c]) children in
+  match expanded with
+  | [] -> failwith "sym_build_frame: empty"
+  | [c] -> c
+  | lst ->
+    let weighted = List.map (fun c -> ((), c)) lst in
+    Schrot.Frame (sym_list2_of_list weighted)
+
+type flip_side_sym = Lo | Hi
+
+(* Apply the Round 6 LCA rewrite at a given LCA tree and its direction.
+   [bar_idx], [stem_idx] are the child indices in the LCA of bar and
+   stem_branch.  [side] picks the promoted child of stem_branch:
+   Lo = first, Hi = last.  Returns None for any structural invalidity
+   (non-adjacent siblings, stem_branch is Tile, stem not in promoted). *)
+let sym_lca_rewrite lca_tree lca_is_h ~bar_idx ~stem_idx side stem =
+  let ch = match lca_tree with
+    | Schrot.Frame c -> List2.to_list c
+    | Schrot.Tile _ -> [] in
+  let n = List.length ch in
+  if bar_idx < 0 || bar_idx >= n || stem_idx < 0 || stem_idx >= n then None
+  else if abs (bar_idx - stem_idx) <> 1 then None
+  else
+    let (_, bar) = List.nth ch bar_idx in
+    let (_, stem_branch) = List.nth ch stem_idx in
+    let bar_before_stem = bar_idx < stem_idx in
+    let stem_branch_is_h = not lca_is_h in
+    match stem_branch with
+    | Schrot.Tile _ -> None
+    | Schrot.Frame sb_ch ->
+      let lst = List2.to_list sb_ch in
+      let prom_idx = match side with Lo -> 0 | Hi -> List.length lst - 1 in
+      let (_, promoted) = List.nth lst prom_idx in
+      let promoted_is_h = not stem_branch_is_h in
+      let rest = List.mapi (fun i pair -> (i, pair)) lst
+                 |> List.filter_map (fun (i, pair) ->
+                      if i = prom_idx then None else Some pair) in
+      if path_to_leaf promoted stem = None then None
+      else
+        let rest_collapsed =
+          match rest with
+          | [(_, c)] -> c
+          | _ ->
+            let weighted = List.map (fun (w, c) -> (w, c)) rest in
+            Schrot.Frame (sym_list2_of_list weighted)
+        in
+        let rest_is_h = match rest with
+          | [_] -> not stem_branch_is_h
+          | _ -> stem_branch_is_h
+        in
+        let bar_is_h = not lca_is_h in
+        let rest_frame =
+          if bar_before_stem then
+            sym_build_frame lca_is_h [(bar_is_h, bar); (rest_is_h, rest_collapsed)]
+          else
+            sym_build_frame lca_is_h [(rest_is_h, rest_collapsed); (bar_is_h, bar)]
+        in
+        let new_sub_is_h = not lca_is_h in
+        let new_sub = match side with
+          | Lo ->
+            sym_build_frame new_sub_is_h
+              [(promoted_is_h, promoted); (lca_is_h, rest_frame)]
+          | Hi ->
+            sym_build_frame new_sub_is_h
+              [(lca_is_h, rest_frame); (promoted_is_h, promoted)]
+        in
+        let (lo_idx, hi_idx) = if bar_before_stem
+                               then (bar_idx, stem_idx)
+                               else (stem_idx, bar_idx) in
+        let merged_list =
+          List.mapi (fun i pair -> (i, pair)) ch
+          |> List.concat_map (fun (i, (_w, c)) ->
+               if i = lo_idx then [(new_sub_is_h, new_sub)]
+               else if i = hi_idx then []
+               else [(not lca_is_h, c)])
+        in
+        if List.length merged_list = 1 then
+          let (sole_is_h, sole) = List.hd merged_list in
+          Some (sole_is_h, sole)
+        else
+          Some (lca_is_h, sym_build_frame lca_is_h merged_list)
+
+(* Rebuild root-side of tree by substituting (sub_is_h, sub) at a
+   path, calling sym_build_frame at each level so same-orientation
+   collapse happens everywhere. *)
+let rec sym_rebuild_through is_h tree path (sub_is_h, sub) =
+  match path with
+  | [] -> (sub_is_h, sub)
+  | i :: rest ->
+    (match tree with
+     | Schrot.Frame ch ->
+       let lst = List2.to_list ch in
+       let child_is_h = not is_h in
+       let (_, child_tree) = List.nth lst i in
+       let (new_child_is_h, new_child) =
+         sym_rebuild_through child_is_h child_tree rest (sub_is_h, sub) in
+       let new_children = List.mapi (fun j (_, c) ->
+         if j = i then (new_child_is_h, new_child)
+         else (child_is_h, c)) lst in
+       let new_frame = sym_build_frame is_h new_children in
+       (is_h, new_frame)
+     | Schrot.Tile _ -> failwith "sym_rebuild_through: path into tile")
+
+(* apply_t_flip_symbolic ~stem ~bar t: Round 6 LCA rewrite, no
+   admissibility check.  Side is derived from stem's position within
+   stem_branch — first child => Lo, last child => Hi, middle =>
+   invalid.  Returns None for structurally invalid (stem, bar) pairs
+   or when stem/bar are not leaves of [t].  See the comment at the
+   top of this section for why this function is unsafe in isolation. *)
+let apply_t_flip_symbolic ~stem ~bar (is_h, tree) =
+  match path_to_leaf tree stem, path_to_leaf tree bar with
+  | Some sp, Some bp ->
+    let lca_path = lcp sp bp in
+    let lca_depth = List.length lca_path in
+    (match descend tree lca_path with
+     | None -> None
+     | Some lca_tree ->
+       let lca_is_h =
+         if lca_depth mod 2 = 0 then is_h else not is_h
+       in
+       if lca_depth >= List.length bp then None
+       else if lca_depth >= List.length sp then None
+       else
+         let bar_idx = List.nth bp lca_depth in
+         let stem_idx = List.nth sp lca_depth in
+         (* Derive side from stem's position within stem_branch. *)
+         let ch = match lca_tree with
+           | Schrot.Frame c -> List2.to_list c
+           | Schrot.Tile _ -> [] in
+         if stem_idx < 0 || stem_idx >= List.length ch then None
+         else
+           let (_, stem_branch) = List.nth ch stem_idx in
+           match stem_branch with
+           | Schrot.Tile _ -> None
+           | Schrot.Frame sb_ch ->
+             let sb_len = List2.length sb_ch in
+             (match path_to_leaf stem_branch stem with
+              | None | Some [] -> None
+              | Some (first_idx :: _) ->
+                let side_opt =
+                  if first_idx = 0 then Some Lo
+                  else if first_idx = sb_len - 1 then Some Hi
+                  else None
+                in
+                (match side_opt with
+                 | None -> None
+                 | Some side ->
+                   (match sym_lca_rewrite lca_tree lca_is_h
+                            ~bar_idx ~stem_idx side stem with
+                    | None -> None
+                    | Some (new_lca_is_h, new_lca) ->
+                      let (final_is_h, final_tree) =
+                        sym_rebuild_through is_h tree lca_path
+                          (new_lca_is_h, new_lca) in
+                      Some (final_is_h, final_tree)))))
+  | _ -> None
 
 (* Enumerate all applicable flips for a tiling and their results. *)
 let enumerate_flips t =
