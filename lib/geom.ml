@@ -605,3 +605,20 @@ let t_flip ?(eps = 1e-9) ~stem ~bar t =
     let side = if stem = fst joint.stem_tiles then Lo else Hi in
     if not (is_asinowski_admissible ~eps g joint side) then None
     else Tiling.apply_t_flip_symbolic ~stem ~bar t
+
+(* Unified flip enumeration — simple, wall slide (from Tiling) plus
+   Asinowski T-flip (geometric, via enumerate_t_flips).  Deduplicated
+   by result tree string. *)
+let enumerate_flips t =
+  let tree_flips = Tiling.enumerate_flips t in
+  let g = of_tiling t in
+  let t_flips =
+    List.map (fun (f, t', _rects) -> (f, t'))
+      (enumerate_t_flips g)
+  in
+  let seen = Hashtbl.create 16 in
+  List.filter (fun (_, t') ->
+    let key = Tiling.to_string t' in
+    if Hashtbl.mem seen key then false
+    else (Hashtbl.add seen key (); true)
+  ) (tree_flips @ t_flips)

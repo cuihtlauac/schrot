@@ -26,9 +26,13 @@ let rec tree_valid = function
 
 let tiling_valid (_, tree) = tree_valid tree && is_valid_labeling (false, tree)
 
-(* Combine tree-based flips with geometric T-flips.
-   Returns (flip, result_tree, new_rects option).
-   new_rects is Some for T-flips (post-flip geometry for reverse checks). *)
+(* All applicable flips for a tiling — simple, wall slide, T-flip. *)
+let all_flips = Geom.enumerate_flips
+
+(* With post-flip rects for T-flips (used by Property C's extra
+   reverse-search at cross junctions, where resolve_splits may
+   produce rectangulations whose reverse T-flip is only visible in
+   the M-M geometric enumeration). *)
 let all_flips_with_rects t =
   let tree_flips = List.map (fun (f, t') -> (f, t', None))
     (Tiling.enumerate_flips t) in
@@ -42,10 +46,6 @@ let all_flips_with_rects t =
     if Hashtbl.mem seen key then false
     else (Hashtbl.add seen key (); true)
   ) all
-
-(* Simple version without rects (for reverse checks, unit tests, etc.) *)
-let all_flips t =
-  List.map (fun (f, t', _) -> (f, t')) (all_flips_with_rects t)
 
 let check_properties max_n =
   let all_ok = ref true in

@@ -16,7 +16,7 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 **Phase F — `pivot_*` removed.**  The five legacy tree-heuristic functions (`pivot_out`, `pivot_out_root`, `pivot_in`, `pivot_in_root`, `pivot_in_wrap`, ~380 LOC) and the `Pivot_out`/`Pivot_in` variants are deleted.  `bin/cheatsheet.ml`, `bin/web.ml`, `bin/flip_unit.ml`, `bin/s_equiv.ml` migrated to `Geom.t_flip`.  The `web.ml` 'x' (exit frame) keybinding was removed; 'e' + arrow is the unified T-flip gesture.
 
-**Phase G pending** — unified `Geom.enumerate_flips` to replace the ad-hoc merge in `bin/flip_check.ml`.
+**Phase G — `Geom.enumerate_flips` unified entry point.**  Single function merges `Tiling.enumerate_flips` (simple + wall slide) with T-flips from `enumerate_t_flips`, deduplicated by result.  `bin/flip_check.ml`'s `all_flips` is now just a thin alias; its `all_flips_with_rects` (used for Property C's extra reverse-search at cross junctions) kept as-is.
 
 **Verification:**
 - `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass (2942/2942)

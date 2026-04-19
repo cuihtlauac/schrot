@@ -1946,7 +1946,8 @@ let enumerate_flips t =
     ) the_leaves
   ) the_leaves;
   (* T_flips come from Geom.enumerate_t_flips (or Geom.t_flip); not
-     generated here to keep Tiling free of the Geom dependency. *)
+     generated here to keep Tiling free of the Geom dependency.
+     Users wanting a unified list should call Geom.enumerate_flips. *)
   List.iter (fun a ->
     List.iter (fun b ->
       if a < b then

@@ -503,11 +503,52 @@ zero mismatches on guillotine-producing flips.  The 150 windmill-
 producing flips at n=7 are expected (M-M Theorem 19) and are tracked
 as a named class in the oracle, not bundled as errors.
 
+## Round 8 — Phases D / F / G shipped
+
+Geom.t_flip is the production tree-level Asinowski pivoting flip.
+The legacy pivot_* tree-heuristic family has been removed; all
+callers migrated.  Geom.enumerate_flips is the unified entry point
+for all flip families.
+
+**Phase D** (commit f371d53) — Tiling.apply_t_flip_symbolic (Round 6
+LCA rewrite, exposed), Geom.t_flip (symbolic composed with
+is_asinowski_admissible).  bin/t_flip_equiv_check.ml verifies
+Geom.t_flip matches the M-M oracle on every (stem, bar) pair:
+n=7: 1632 Some match, 9708 both_none (including 150 windmill cases
+where sym returns None via filter), zero divergences.
+
+**Phase F** (commit db9b0e9) — Deleted pivot_out / pivot_out_root /
+pivot_in / pivot_in_root / pivot_in_wrap (~378 LOC), Pivot_out /
+Pivot_in variants, and count_flip_sites placeholder.  Migrated
+bin/cheatsheet.ml and bin/web.ml to Geom.t_flip; dropped the
+web.ml 'x' (single-tile extraction) keybinding — 'e' + arrow is
+the unified T-flip gesture.  bin/flip_unit.ml replaced pivot_*
+regression tests with T-flip versions.  bin/s_equiv.ml pattern
+match trimmed.
+
+**Phase G** (this commit) — Geom.enumerate_flips merges
+Tiling.enumerate_flips + enumerate_t_flips with dedup.
+bin/flip_check.ml's all_flips is a thin alias; all_flips_with_rects
+kept for Property C's cross-junction reverse search.
+
+flip_check at n=7: A/B/C/D all pass (2942/2942).
+
 ## Test infrastructure
 
-- `bin/flip_unit.ml`: 21 unit tests with `assert_invertible` / `assert_invertible_fn` patterns. Covers simple flip, wall slide, pivot_out (2-ary, >=3-ary, root), pivot_in (merge, insert), pivot_out_root, pivot_in_root.
-- `bin/flip_check.ml`: exhaustive model checker for properties A-D. D4 orbit reduction. Outputs counterexamples in `(tiling_str, flip_str, property)` format for `flip_unit.ml`.
-- `bin/flip_test.ml`: collects counterexamples, generates SVG visualization.
-- `bin/geom_flip_check.ml`: pure-geometric invertibility PoC (Round 3) with genericity / bypass / `--generic` instrumentation (Round 4).
+- `bin/flip_unit.ml`: focused per-flip-type regression tests.
+- `bin/flip_check.ml`: exhaustive model checker for Properties A-D
+  using Geom.enumerate_flips.  D4 orbit reduction.
+- `bin/flip_test.ml`: collects counterexamples, generates SVG.
+- `bin/geom_flip_check.ml`: pure-geometric M-M invertibility PoC
+  (Rounds 3-5).
+- `bin/asinowski_flip_check.ml`: pure-geometric Asinowski-pivoting
+  invertibility PoC (Round 7).
+- `bin/t_flip_equiv_check.ml`: Geom.t_flip vs M-M oracle equivalence
+  (Round 8 / Phase D).
+- `bin/tflip_oracle.ml`, `bin/tflip_sym_check.ml`: Round 6 oracle
+  and symbolic comparator; retained for historical reproducibility.
 
-**Testing workflow**: (1) add smallest failing case from `flip_check` as unit test, (2) implement fix, (3) run `flip_unit.exe`, (4) run `flip_check --max-leaves 4` (fast), (5) run `--max-leaves 7` (thorough).
+**Testing workflow**: (1) add smallest failing case from `flip_check`
+as unit test, (2) implement fix, (3) run `flip_unit.exe`, (4) run
+`flip_check --max-leaves 4` (fast), (5) run `--max-leaves 7`
+(thorough).

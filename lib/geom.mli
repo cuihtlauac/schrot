@@ -162,3 +162,13 @@ val t_flip : ?eps:float -> stem:int -> bar:int -> Tiling.t -> Tiling.t option
 
     Internally lowers [t] with irrational split ratios so admissibility
     reflects the generic strong poset regardless of caller geometry. *)
+
+val enumerate_flips : Tiling.t -> (Tiling.flip * Tiling.t) list
+(** All applicable flips for a Schroder tiling, unified across flip
+    families: simple dissolve/create and wall slide (from
+    {!Tiling.enumerate_flips}) plus Asinowski T-flips (from
+    {!enumerate_t_flips}).  Deduplicated by result tree string.
+
+    This is the recommended entry point for flip enumeration;
+    {!Tiling.enumerate_flips} returns only the tree-only subset (no
+    T-flips), because Tiling cannot depend on Geom. *)
