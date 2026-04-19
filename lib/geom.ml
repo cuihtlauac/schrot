@@ -553,3 +553,20 @@ let enumerate_t_flips_from_rects ?(eps = 1e-9) rects =
     if Hashtbl.mem seen key then None
     else (Hashtbl.add seen key (); Some (f, t))
   ) (List.rev !results)
+
+(* --- Asinowski-admissible T-flips --- *)
+
+(* A T-flip is Asinowski-admissible iff its post-flip geometry is a
+   strong (guillotine and generic) rectangulation.  Asinowski's
+   pivoting flips (§4.5, Theorem 22) are exactly the Merino-Mütze
+   T-flips restricted to cases preserving guillotine — same rotation
+   as [apply_t_flip], stricter admissibility.  See THEORY.md Layer 2. *)
+let is_asinowski_admissible ?(eps = 1e-9) g joint side =
+  match apply_t_flip ~eps joint side g with
+  | None -> false
+  | Some rects ->
+    match tree_of_rects ~eps rects with
+    | Ok [t'] ->
+      let g' = { tiling = t'; rects; adjacency = [] } in
+      is_generic ~eps g'
+    | Ok _ | Error _ -> false

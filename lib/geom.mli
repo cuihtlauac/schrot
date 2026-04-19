@@ -127,3 +127,21 @@ val tree_of_rects :
 val tree_of_geom :
   ?eps:float -> t -> (Tiling.t list, non_guillotine) result
 (** Convenience wrapper: [tree_of_geom g = tree_of_rects g.rects]. *)
+
+(** {1 Asinowski-admissible T-flips} *)
+
+val is_asinowski_admissible :
+  ?eps:float -> t -> t_joint -> flip_side -> bool
+(** Whether a T-flip's post-flip geometry is a strong (guillotine and
+    generic) rectangulation.  This is Asinowski et al. 2024 §4.5's
+    admissibility criterion; it restricts the Merino-Mütze T-flips of
+    {!apply_t_flip} to exactly those that stay in the strong poset.
+
+    A flip passes iff {!apply_t_flip} returns [Some rects] and
+    [tree_of_rects rects] returns [Ok [t']] with generic [t']
+    (no cross junctions).  Other outcomes — windmill, ambiguous
+    reconstruction (multi-tree [Ok] from cross junctions created by the
+    flip), or [apply_t_flip] rejecting the input — fail.
+
+    Additive to the existing M-M flip machinery; {!apply_t_flip} and
+    {!subwall_simplicity} are unchanged. *)
