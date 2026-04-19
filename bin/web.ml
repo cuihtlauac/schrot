@@ -365,9 +365,8 @@ body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; display: fle
   <kbd>Alt</kbd>+Arrow split &middot;
   <kbd>Alt</kbd>+<kbd>Del</kbd> close &middot;
   <kbd>d</kbd> dissolve &middot;
-  <kbd>x</kbd> exit frame &middot;
   <kbd>f</kbd>+Arrow 2-subframe &middot;
-  <kbd>e</kbd>+Arrow enter frame &middot;
+  <kbd>e</kbd>+Arrow T-flip &middot;
   <kbd>Esc</kbd> deselect &middot;
   <kbd>Ctrl+Z</kbd> undo
 </div>
@@ -592,11 +591,9 @@ document.addEventListener('keydown', (e) => {
   }
   // d: dissolve
   if (e.key === 'd') { e.preventDefault(); postCommand('dissolve', selectedTile); return; }
-  // x: exit frame
-  if (e.key === 'x') { e.preventDefault(); postCommand('exit', selectedTile); return; }
   // f: 2-subframe mode (then arrow)
   if (e.key === 'f') { e.preventDefault(); pendingMode = 'subframe'; updateMode(); return; }
-  // e: enter frame mode (then arrow)
+  // e: T-flip mode (then arrow selects bar neighbor)
   if (e.key === 'e') { e.preventDefault(); pendingMode = 'enter'; updateMode(); return; }
   // Plain arrow: select segment on that edge of the tile
   if (dir) {
@@ -681,20 +678,15 @@ let () =
                   | Some t' -> desc, t'
                   | None -> desc ^ " (no effect)", state.tiling)
                | None -> "2-subframe (no neighbor)", state.tiling)
-            | "exit" ->
-              let desc = Printf.sprintf "exit %d" tile in
-              (match Tiling.pivot_out tile state.tiling with
-               | Some t' -> desc, t'
-               | None -> desc ^ " (no effect)", state.tiling)
             | "enter" ->
               let arrow = Option.bind (parse_json_field body "dir") arrow_of_string in
               (match Option.bind arrow (fun a -> Tiling.neighbor tile a state.tiling) with
                | Some nb ->
-                 let desc = Printf.sprintf "enter %d %d" tile nb in
-                 (match Tiling.pivot_in tile nb state.tiling with
+                 let desc = Printf.sprintf "t-flip %d %d" tile nb in
+                 (match Geom.t_flip ~stem:tile ~bar:nb state.tiling with
                   | Some t' -> desc, t'
                   | None -> desc ^ " (no effect)", state.tiling)
-               | None -> "enter (no neighbor)", state.tiling)
+               | None -> "t-flip (no neighbor)", state.tiling)
             | _ -> "?", state.tiling
           in
           push_history ();

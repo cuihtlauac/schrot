@@ -75,7 +75,7 @@ geometric reference.
 
 ## Future directions
 
-- **Layer 2 refinement**: pivot_in insert mode (grow Frame, inverse of pivot_out from >=3-ary). Command compiler: `neighbor` -> flip type selection -> apply. Distinguish single-cover pivots from multi-cover jumps.
+- **Layer 2 refinement**: command compiler (`neighbor` → flip type selection → apply) for the keyboard UX; distinguish single-cover pivots from multi-cover jumps.
 - **Layer 3 implementation**: mutable split positions, incremental `Poset.of_geom` after single-segment updates. Entry point for Hyprland border-drag resize.
 - Model checking with Schroder enumeration (fewer topologies than binary)
 - Three-level verification: visual SVG -> model checking -> Rocq proof

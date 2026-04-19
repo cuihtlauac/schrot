@@ -147,18 +147,11 @@ val adjacency_fingerprint : int -> (int * int) list -> (int * int list) list
 type flip =
   | Simple_dissolve of int
   | Simple_create of int * int
-  | Pivot_out of int
-  | Pivot_in of int * int
   | Wall_slide of int * int
   | T_flip of int * int  (** (stem_tile, bar_tile) *)
 
 val simple_dissolve : int -> t -> t option
 val simple_create : int -> int -> t -> t option
-val pivot_out : int -> t -> t option
-val pivot_out_root : int -> side -> t -> t option
-val pivot_in : int -> int -> t -> t option
-val pivot_in_root : int -> side -> t -> t option
-val pivot_in_wrap : int -> int -> t -> t option
 val wall_slide : int -> int -> t -> t option
 
 val apply_t_flip_symbolic : stem:int -> bar:int -> t -> t option
@@ -179,7 +172,6 @@ val apply_t_flip_symbolic : stem:int -> bar:int -> t -> t option
 
 val enumerate_flips : t -> (flip * t) list
 val flip_to_string : flip -> string
-val count_flip_sites : 'a -> int
 
 (** {1 Exact-rational cut extraction} *)
 

@@ -190,10 +190,10 @@ let () =
 
     [| Some ("Enter", "next to a sub-frame",
              3, [2], Some `Right,
-             t, apply (Tiling.pivot_in 3 2));
+             t, apply (Geom.t_flip ~stem:0 ~bar:3));
        Some ("Exit", "in a nested frame",
              2, [1], None,
-             t, apply (Tiling.pivot_out 2)) |];
+             t, apply (Geom.t_flip ~stem:2 ~bar:0)) |];
 
     [| Some ("Slide", "consecutive in frame",
              3, [2; 1; 0], Some `Right,

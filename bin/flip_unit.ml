@@ -39,10 +39,8 @@ let assert_invertible name t flip =
   let apply = match flip with
     | Tiling.Simple_dissolve n -> Tiling.simple_dissolve n
     | Simple_create (a, b) -> Tiling.simple_create a b
-    | Pivot_out n -> Tiling.pivot_out n
-    | Pivot_in (n, m) -> Tiling.pivot_in n m
     | Wall_slide (a, b) -> Tiling.wall_slide a b
-    | T_flip _ -> fun _ -> None  (* applied via geometry, not tree ops *)
+    | T_flip (stem, bar) -> fun t -> Geom.t_flip ~stem ~bar t
   in
   assert_invertible_fn name t apply
 
@@ -56,27 +54,6 @@ let t_h012 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [
 let t_h_v01_2 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
   Schrot.unit_frame (List2.Cons2 (Tile 0, Tile 1, [])), Tile 2, [])))
 
-(* n=3: root boundary extraction targets *)
-let t_v210 : Tiling.t = (false, Schrot.unit_frame (List2.Cons2 (Tile 2, Tile 1, [Tile 0])))
-let t_v102 : Tiling.t = (false, Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 0, [Tile 2])))
-
-(* n=4: >=3-ary child extraction targets *)
-let t_h31_v20 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
-  Tile 3, Tile 1, [Schrot.unit_frame (List2.Cons2 (Tile 2, Tile 0, []))])))
-let t_v3_h210 : Tiling.t = (false, Schrot.unit_frame (List2.Cons2 (
-  Tile 3, Schrot.unit_frame (List2.Cons2 (Tile 2, Tile 1, [Tile 0])), [])))
-
-(* n=4: existing 2-ary extraction (should keep working) *)
-let t_h3_v2_h10 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
-  Tile 3, Schrot.unit_frame (List2.Cons2 (
-    Tile 2, Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 0, [])), [])), [])))
-
-(* n=4 counterexamples: pivot_in merge into ≥3-ary, pivot_out from ≥3-ary root *)
-let t_h32_v10 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
-  Tile 3, Tile 2, [Schrot.unit_frame (List2.Cons2 (Tile 1, Tile 0, []))])))
-let t_h3_v21_0 : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
-  Tile 3, Schrot.unit_frame (List2.Cons2 (Tile 2, Tile 1, [])), [Tile 0])))
-
 let () =
   (* Simple flip at root *)
   assert_invertible "dissolve_root" t_h01 (Simple_dissolve 0);
@@ -88,26 +65,9 @@ let () =
   assert_invertible "slide_12" t_h012 (Wall_slide (1, 2));
   (* Dissolve non-root *)
   assert_invertible "dissolve_v01" t_h_v01_2 (Simple_dissolve 0);
-  (* Pivot out from 2-ary *)
-  assert_invertible "pivot_out_0" t_h_v01_2 (Pivot_out 0);
-  assert_invertible "pivot_out_1" t_h_v01_2 (Pivot_out 1);
-  (* Root boundary extraction from >=3-ary root *)
-  assert_invertible_fn "root_extract_first_B" t_v210 (Tiling.pivot_out_root 2 Before);
-  assert_invertible_fn "root_extract_first_A" t_v210 (Tiling.pivot_out_root 2 After);
-  assert_invertible_fn "root_extract_last_B" t_v102 (Tiling.pivot_out_root 2 Before);
-  assert_invertible_fn "root_extract_last_A" t_v102 (Tiling.pivot_out_root 2 After);
-  (* >=3-ary child Frame extraction *)
-  assert_invertible "child3_extract_0" t_h31_v20 (Pivot_out 0);
-  assert_invertible "child3_extract_first" t_v3_h210 (Pivot_out 2);
-  (* Existing 2-ary extraction still works *)
-  assert_invertible "2ary_extract_1" t_h3_v2_h10 (Pivot_out 1);
-  assert_invertible "2ary_extract_0" t_h3_v2_h10 (Pivot_out 0);
-  (* n=4 counterexamples *)
-  assert_invertible "cx4_merge_21" t_h32_v10 (Pivot_in (2, 1));
-  assert_invertible_fn "cx4_pout_3_B" t_h3_v21_0 (Tiling.pivot_out_root 3 Before);
-  assert_invertible_fn "cx4_pout_3_A" t_h3_v21_0 (Tiling.pivot_out_root 3 After);
-  assert_invertible_fn "cx4_pout_0_B" t_h3_v21_0 (Tiling.pivot_out_root 0 Before);
-  assert_invertible_fn "cx4_pout_0_A" t_h3_v21_0 (Tiling.pivot_out_root 0 After);
+  (* T-flip via Geom.t_flip (Asinowski pivoting) *)
+  assert_invertible "t_flip_0_2" t_h_v01_2 (T_flip (0, 2));
+  assert_invertible "t_flip_1_2" t_h_v01_2 (T_flip (1, 2));
   (* Summary *)
   if !failures = 0 then
     Printf.printf "\nAll unit tests passed.\n"

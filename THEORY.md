@@ -31,7 +31,7 @@ In the codebase: `Tiling.split` and `Tiling.close` implement these directly on S
 
 Flips preserve size.  They are the cover relations of the lattice on their respective object set; every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join.  The polytope structure guarantees connectivity and rules out dead ends *within the graph under consideration*.
 
-In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (swap two consecutive children), and either `pivot_out`/`pivot_in` (the legacy Asinowski-pivot attempt at the tree level, kept but no longer generated) or `T_flip` (populated by `Geom.enumerate_t_flips`, i.e. M-M).  `enumerate_flips` generates all applicable flips.  Verified at n≤7: size preservation, validity, flip graph connectivity, and invertibility after the Round 5 `subwall_simplicity` fix (see FLIP_INVERTIBILITY.md).  The remaining gap — M-M flips that exit the guillotine subspace — is the subject of Round 7's geometric Asinowski PoC.
+In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (swap two consecutive children), and `T_flip` (Asinowski pivoting, produced by `Geom.t_flip` or `Geom.enumerate_t_flips`).  `Tiling.enumerate_flips` generates simple/wall_slide; the `Geom.*` arm supplies T-flips.  Verified at n≤7: size preservation, validity, flip graph connectivity, and invertibility (Property C at 2942/2942).  The legacy `pivot_*` tree-heuristic attempt was removed in Phase F — `Geom.t_flip` with Asinowski admissibility is the correct tree-level T-flip.
 
 ## Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
 

@@ -10,13 +10,21 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 **Key framing.**  `Geom.enumerate_t_flips` implements **Merino-Mütze §2.2** (generic).  Asinowski pivoting flips = M-M T-flip restricted to guillotine-preserving outputs (same rotation, stricter admissibility).  The Schroder-tree layer must apply the Asinowski restriction.  See THEORY.md Layer 2 for the three-flip-graph distinction (M-M generic / Asinowski strong / weak-guillotine Schroder-tree quotient).
 
-**Round 7 is next — geometric Asinowski PoC.**  Before any further tree-layer work, add `Geom.is_asinowski_admissible` and `bin/asinowski_flip_check.ml` mirroring the Round 3–5 discipline.  Ground-truth cross-check: at n=7 generic mode, `rejected_by_asinowski` must equal 150, `admissible` = 1632.  Phases D/F/G (promote symbolic rule to `lib/tiling.ml`, remove pivot_*, restore T-flip in `enumerate_flips`) are deferred until Round 7 data lands.  See backlog.md Round 7.
+**Round 7 — geometric Asinowski PoC complete.**  `Geom.is_asinowski_admissible` in lib/geom.ml; `bin/asinowski_flip_check.ml` verifies invertibility of the Asinowski-pivoting subset at n≤10 in seconds.  At n=7 generic: 150 rejected, 1632 admissible (matches Round 6 oracle exactly), zero windmill-reverse or genuine failures.  See backlog.md.
+
+**Phase D — `Geom.t_flip` promoted.**  Round 6 symbolic LCA-rewrite lives in `lib/tiling.ml` as `Tiling.apply_t_flip_symbolic`; `lib/geom.ml` exposes `Geom.t_flip ~stem ~bar` composing it with the Asinowski admissibility filter.  `bin/t_flip_equiv_check.ml` verifies equivalence against the M-M oracle.
+
+**Phase F — `pivot_*` removed.**  The five legacy tree-heuristic functions (`pivot_out`, `pivot_out_root`, `pivot_in`, `pivot_in_root`, `pivot_in_wrap`, ~380 LOC) and the `Pivot_out`/`Pivot_in` variants are deleted.  `bin/cheatsheet.ml`, `bin/web.ml`, `bin/flip_unit.ml`, `bin/s_equiv.ml` migrated to `Geom.t_flip`.  The `web.ml` 'x' (exit frame) keybinding was removed; 'e' + arrow is the unified T-flip gesture.
+
+**Phase G pending** — unified `Geom.enumerate_flips` to replace the ad-hoc merge in `bin/flip_check.ml`.
 
 **Verification:**
-- `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass
+- `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass (2942/2942)
+- `dune exec bin/asinowski_flip_check.exe -- --max-leaves 7 --generic`  — 150 rejected / 1632 admissible OK
+- `dune exec bin/t_flip_equiv_check.exe -- --max-leaves 7`  — Geom.t_flip matches oracle
 - `dune exec bin/geom_flip_check.exe -- --max-leaves 7` / `--generic`  — M-M geom-only
-- `dune exec bin/tflip_sym_check.exe -- --max-leaves 7`  — symbolic vs M-M oracle
-- `scripts/run_long_flip_check.sh --max-n 10`  — stress check with self-contained report under `reports/`
+- `scripts/run_long_flip_check.sh --max-n 10`  — M-M stress check, self-contained report under `reports/`
+- `scripts/run_asinowski_check.sh --max-n 10`  — Asinowski stress check
 
 ## Build
 
@@ -28,6 +36,8 @@ dune exec bin/tiling_test.exe -- --output svg    # Schroder tiling enumeration +
 dune exec bin/model_check.exe -- --policy dominance --max-leaves 6
 dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
 dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
+dune exec bin/asinowski_flip_check.exe -- --max-leaves 7 --generic  # Asinowski pivot invertibility
+dune exec bin/t_flip_equiv_check.exe -- --max-leaves 7  # Geom.t_flip vs M-M oracle
 dune exec bin/strong_check.exe -- --max-leaves 8 # strong guillotine counting + D4 orbits
 dune exec bin/checker_test.exe                   # smoke tests for the Checker library
 dune exec bin/equiv_check.exe -- --max-leaves 7  # verify equivalence predicates
