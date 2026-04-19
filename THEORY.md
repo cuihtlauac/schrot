@@ -17,14 +17,21 @@ In the codebase: `Tiling.split` and `Tiling.close` implement these directly on S
 
 ## Layer 2 — Fixed size: the quotientope
 
-**Object**: the set SR_n of strong rectangulations of size n.
-**Operations**: 3 flip types (simple flip, pivot, wall slide) — 5 under the full classification, 3 under D4.
+**Object**: the set SR_n of rectangulations of size n (the precise set depends on which flip graph is under discussion — see below).
 **Structure**: the flip graph is the skeleton of a convex polytope (quotientope), and its orientation is a lattice.
-**References**: Reading 2012 (lattice congruence); Pilaud-Santos 2019 (polytopality); Asinowski et al. 2024, Theorem 22 (the 5 flip types).
+**References**: Reading 2012 (lattice congruence); Pilaud-Santos 2019 (polytopality); Merino-Mütze 2021 §2.2 and Theorem 19 (generic flip graph); Asinowski et al. 2024 Theorem 22 (strong-poset flip graph) and Theorem 27 (windmill characterization).
 
-Flips preserve size. They are the cover relations of the lattice on SR_n: every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join. The polytope structure guarantees connectivity (any tiling can reach any other through a sequence of flips) and rules out dead ends.
+### Three distinct flip graphs
 
-In the codebase: `simple_dissolve`/`simple_create` (simple flip: dissolve or create a 2-ary all-Tile sub-frame), `pivot_out`/`pivot_in` (pivot: extract or insert a boundary leaf across Frame levels, with merge-into-context for alternation), `wall_slide` (swap two consecutive children). `enumerate_flips` generates all applicable flips for a tiling. Verified: size preservation, validity, and flip graph connectivity up to n=7. **Invertibility (property C) is currently broken** — see FLIP_INVERTIBILITY.md.
+1. **Merino-Mütze generic** (2021 §2.2, Theorem 19).  Object: all generic rectangulations (including windmills).  Operations: T-flip, simple flip, wall slide.  Invertible by Theorem 19 *within the generic space*.  The T-flip is not closed on the guillotine subset: applied to a guillotine input it can produce a windmill output.  The codebase's `Geom.apply_t_flip` / `Geom.enumerate_t_flips` implement this operation.
+
+2. **Asinowski strong poset** (2024 §4.5, Theorem 22).  Object: strong (guillotine, i.e. windmill-avoiding per Theorem 27) rectangulations.  Operations: L-B pivoting, R-T pivoting, simple flip, V-slide, H-slide — five types, three under D4 symmetry.  Cover relations of a lattice, **closed on guillotine by construction**.  Geometrically, Asinowski's pivoting flips *are* M-M's T-flip restricted to guillotine-preserving cases — same rotation, stricter admissibility.
+
+3. **Weak guillotine / Schroder-tree quotient**.  Object: weak-guillotine classes, i.e. Schroder trees.  This is the quotient of the strong poset by S-equivalence (cross-junction diagonals identified).  It is what the Schrot codebase represents as `int Schrot.tiling`.  Flips on this quotient descend from Asinowski's strong-poset flips; some strong-poset flips become identity on the quotient (endpoints in the same weak class), others become non-trivial cover relations.
+
+Flips preserve size.  They are the cover relations of the lattice on their respective object set; every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join.  The polytope structure guarantees connectivity and rules out dead ends *within the graph under consideration*.
+
+In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (swap two consecutive children), and either `pivot_out`/`pivot_in` (the legacy Asinowski-pivot attempt at the tree level, kept but no longer generated) or `T_flip` (populated by `Geom.enumerate_t_flips`, i.e. M-M).  `enumerate_flips` generates all applicable flips.  Verified at n≤7: size preservation, validity, flip graph connectivity, and invertibility after the Round 5 `subwall_simplicity` fix (see FLIP_INVERTIBILITY.md).  The remaining gap — M-M flips that exit the guillotine subspace — is the subject of Round 7's geometric Asinowski PoC.
 
 ## Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
 

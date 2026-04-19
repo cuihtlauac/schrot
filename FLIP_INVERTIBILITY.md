@@ -28,9 +28,11 @@ Commit `171cd50` fixed `pivot_in` to use "merge mode" per Merino-Mutze 2021 SS2.
 
 ### Asinowski et al. 2024 (arXiv:2402.01483v1)
 
-**SS4.5, Figure 19** (p.25) -- the 5 flip types on strong rectangulations: left-bottom pivoting, right-top pivoting, simple flip, vertical wall slide, horizontal wall slide. These are cover relations of a lattice (Theorem 22). Each has a well-defined inverse.
+**SS4.5, Figure 19** (p.25) -- the 5 flip types on strong rectangulations: left-bottom pivoting, right-top pivoting, simple flip, vertical wall slide, horizontal wall slide. These are cover relations of a lattice (Theorem 22). Each has a well-defined inverse **within the strong poset**. These are distinct from M-M §2.2 T-flips, which are invertible within the larger generic rectangulation lattice; the two coincide exactly when the M-M flip's output stays guillotine.  Geometrically, Asinowski's L-B and R-T pivoting flips *are* M-M's T-flip restricted to guillotine-preserving cases (same rotation, stricter admissibility).
 
 **Proposition 9** (p.16) -- the strong poset P_s(R) is a planar 2-dimensional lattice. Implemented in the codebase as `Poset.of_geom`.
+
+**Theorem 27** (p.38) -- guillotine (= strong) rectangulations are characterized by avoidance of two mesh patterns p₁, p₂ (the "windmill" configurations).  This is what makes the strong poset closed under Asinowski's flip types.
 
 **SS5.3** (p.36) -- strong guillotine enumeration recurrence S(n,l,t,r,b).
 
@@ -445,33 +447,49 @@ on **every** guillotine-producing T-flip:
 | 6 | 352   | 333   | 0        | 0        | 19                         |
 | 7 | 1782  | 1632  | 0        | 0        | 150                        |
 
-"Anomalies" are cases where `apply_t_flip` produces a non-guillotine
-rectangulation (a windmill).  These T-flips escape the Schroder-tree
-representation; the candidate rule still produces a tree for them
-but that tree does not represent the actual post-flip geometry.  A
-production `Tiling.t_flip` must return `None` in these cases; the
-detection mechanism is deferred (see below).
+The **150 cases at n=7 (and 19 at n=6, 1 at n=5) are not anomalies in
+the sense of bugs.**  They are M-M T-flips (Theorem 19, generic
+rectangulations) whose post-flip geometry is a windmill.  Such flips
+are valid cover relations of the *generic* flip graph per M-M but are
+excluded from the *strong* poset per Asinowski Theorem 27 — and
+therefore have no representative in the Schroder-tree (guillotine)
+layer.  Any symbolic tree-level flip must filter them out.
+
+**The filter is Asinowski's admissibility criterion.**  Geometrically,
+a post-flip rectangulation is guillotine iff `Geom.tree_of_geom` returns
+`Ok [single generic tree]`.  That predicate *is* the restriction
+"Asinowski pivoting = M-M T-flip ∩ guillotine."  No other test is
+needed; the three options listed in earlier drafts (structural tree
+test, round-trip, pre-filtering) all reduce to applying this predicate
+at different points in the pipeline.
 
 ### What remains (Phase D / F / G of the exploration plan)
 
-- **Promote to `lib/tiling.ml`**: move the rule from
-  `bin/tflip_sym_check.ml` into a `Tiling.t_flip` function with the
-  same signature the plan called for.
-- **Non-guillotine detection**: before returning `Some t'`, verify
-  that the symbolic result matches geometry.  Options under
-  consideration:
-  - structural test at tree level (likely possible but not yet
-    characterized);
-  - round-trip via `Geom.of_tiling` + `Geom.apply_t_flip` + rect
-    equality (expensive but unambiguously correct);
-  - change enumeration path so non-guillotine cases never reach
-    `t_flip` in the first place (requires pre-filtering).
-- **Remove pivot_***: delete `pivot_in`, `pivot_out`,
+- **Round 7 — geometric Asinowski PoC** (the next step, before any
+  tree-layer work).  Add `Geom.is_asinowski_admissible : t -> t_joint
+  -> side -> bool` composing `apply_t_flip` with the guillotine
+  predicate above, and mirror `bin/geom_flip_check.ml` as
+  `bin/asinowski_flip_check.ml` to verify invertibility of the
+  filtered flip set.  Per Theorem 27, every filtered forward flip
+  should have a filtered reverse; any flip whose only reverse is
+  M-M-but-windmill-producing is a theorem-reading or filter bug and
+  must be logged.  Ground-truth sanity check: at n=7 generic mode the
+  PoC's `rejected_by_asinowski` count must equal 150 and its
+  `admissible` count must equal 1632 (Round 6 oracle data).  See
+  backlog.md Round 7 for detailed scope.
+- **Phase D — promote to `lib/tiling.ml`**: move the Round 6 LCA-rewrite
+  rule from `bin/tflip_sym_check.ml` into a `Tiling.t_flip` function.
+  Requires a tree-level admissibility test — either round-trip via
+  `Geom.of_tiling` + `Geom.tree_of_geom` (correct, likely slow) or a
+  separable-permutation mesh-pattern test (cheaper, if Round 7's
+  timing shows the round-trip is prohibitive).  Deferred until
+  Round 7 data.
+- **Phase F — remove pivot_***: delete `pivot_in`, `pivot_out`,
   `pivot_out_root`, `pivot_in_root`, `pivot_in_wrap` and migrate
   `bin/flip_unit.ml`, `bin/cheatsheet.ml`, `bin/web.ml`.
-- **Restore T-flip in `Tiling.enumerate_flips`** using the symbolic
-  op directly, replacing the geometric arm currently supplied by
-  `bin/flip_check.ml`.
+- **Phase G — restore T-flip in `Tiling.enumerate_flips`** using the
+  symbolic op composed with the admissibility filter, replacing the
+  geometric arm currently supplied by `bin/flip_check.ml`.
 
 ### Verification
 
@@ -481,7 +499,9 @@ opam exec -- dune exec bin/tflip_sym_check.exe -- --max-leaves 7
 ```
 
 The oracle report is the ground-truth dataset; the checker confirms
-zero mismatches on guillotine-producing flips.
+zero mismatches on guillotine-producing flips.  The 150 windmill-
+producing flips at n=7 are expected (M-M Theorem 19) and are tracked
+as a named class in the oracle, not bundled as errors.
 
 ## Test infrastructure
 

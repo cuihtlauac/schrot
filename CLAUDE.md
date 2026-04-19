@@ -4,11 +4,18 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 ## Dirty state
 
-**Flip invertibility resolved (Round 5).**  `Geom.subwall_simplicity` rewritten with an edge-match criterion (stem's far edge == bar's far edge on the flip side).  `flip_check` Property C now passes at all n tested (2942/2942 at n=7); `geom_flip_check` passes in both equal-splits and generic-weight modes up to n=12 (8.9M flips).  See FLIP_INVERTIBILITY.md Round 5 for the fix rationale.
+**Round 5 — M-M flip invertibility resolved.**  `Geom.subwall_simplicity` rewritten with an edge-match criterion.  `flip_check` Property C passes at all n tested (2942/2942 at n=7); `geom_flip_check` passes in both equal-splits and generic-weight modes up to n=12 (8.9M flips).  See FLIP_INVERTIBILITY.md Round 5.
+
+**Round 6 — symbolic LCA-rewrite rule derived from M-M oracle.**  `bin/tflip_sym_check.ml` matches `Geom.apply_t_flip` exactly on all 1632 guillotine-producing T-flips at n≤7.  The 150 "anomalies" at n=7 (19 at n=6, 1 at n=5) are M-M T-flips whose post-flip geometry is a windmill — expected by M-M Theorem 19 (generic rectangulation lattice), excluded from Asinowski's strong poset by Theorem 27.  Not bugs.
+
+**Key framing.**  `Geom.enumerate_t_flips` implements **Merino-Mütze §2.2** (generic).  Asinowski pivoting flips = M-M T-flip restricted to guillotine-preserving outputs (same rotation, stricter admissibility).  The Schroder-tree layer must apply the Asinowski restriction.  See THEORY.md Layer 2 for the three-flip-graph distinction (M-M generic / Asinowski strong / weak-guillotine Schroder-tree quotient).
+
+**Round 7 is next — geometric Asinowski PoC.**  Before any further tree-layer work, add `Geom.is_asinowski_admissible` and `bin/asinowski_flip_check.ml` mirroring the Round 3–5 discipline.  Ground-truth cross-check: at n=7 generic mode, `rejected_by_asinowski` must equal 150, `admissible` = 1632.  Phases D/F/G (promote symbolic rule to `lib/tiling.ml`, remove pivot_*, restore T-flip in `enumerate_flips`) are deferred until Round 7 data lands.  See backlog.md Round 7.
 
 **Verification:**
 - `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass
-- `dune exec bin/geom_flip_check.exe -- --max-leaves 7` / `--generic`  — geom-only
+- `dune exec bin/geom_flip_check.exe -- --max-leaves 7` / `--generic`  — M-M geom-only
+- `dune exec bin/tflip_sym_check.exe -- --max-leaves 7`  — symbolic vs M-M oracle
 - `scripts/run_long_flip_check.sh --max-n 10`  — stress check with self-contained report under `reports/`
 
 ## Build

@@ -1,49 +1,77 @@
 # Geometric T-flip backlog
 
-T-joint enumeration is done (`Geom.t_joints`, verified through n=8).
-Tree reconstruction is done (`Geom.tree_of_rects`, verified through n=8).
+## Rounds 3–6 summary (done)
 
-## 1. Sub-wall simplicity check
+Sub-wall simplicity, geometric flip application, and integration of
+M-M T-flips are complete.  `Geom.subwall_simplicity` rewritten with
+edge-match criterion (Round 5); `Geom.apply_t_flip` / `enumerate_t_flips`
+verified invertible at n≤12 in both equal-splits and generic-weight
+modes (8.9M forward flips).  Round 6 derived a symbolic LCA-rewrite
+rule from the geometric oracle that matches `apply_t_flip` exactly on
+the 1632 guillotine-producing T-flips at n≤7.  See FLIP_INVERTIBILITY.md
+for full history.
 
-At each T-joint, determine whether sub-wall w' (and w'') is a simple edge
-(separates exactly 2 tiles, no other vertex on it). This is the T-flip
-precondition from Merino-Mutze §2.2.
+The 150 windmill-producing T-flips at n=7 (and smaller counts at n=5, 6)
+are Merino-Mütze flips that exit the guillotine subspace; they are
+expected per M-M Theorem 19 and excluded from the strong poset per
+Asinowski Theorem 27.  They are not bugs.
 
-Approach: for each T-joint at P on through-wall w, walk from P toward the
-wall boundary on each side. If no other T-joint lies on w between P and the
-boundary, that sub-wall is simple. The `t_joints` list has all the vertices;
-group by through-wall (same axis and coordinate), sort along the wall, check
-gaps to boundary.
+`flip_check` verification at n=7: 2942/2942 invertible (was 1625/4209
+failing pre-Round-5).
 
-Output: for each T-joint, a pair `(bool * bool)` — whether w' and w'' are
-flippable.
+## Round 7 — Geometric Asinowski PoC
 
-## 2. Geometric flip application
+Before any further tree-layer work (Phases D/F/G), verify Asinowski's
+pivoting flip structure geometrically in isolation.  This is the same
+discipline that worked for M-M in Rounds 3–5.
 
-Given a T-joint with a simple sub-wall w' between bar tile B and stem tile A,
-compute the new tile rectangles.
+**What is Asinowski pivoting, operationally?**  Geometrically identical
+to M-M's T-flip rotation, but admissible only when the post-flip
+rectangulation stays guillotine.  So it factors as `Geom.apply_t_flip`
+(already correct) + a guillotine-admissibility predicate.
 
-The operation (paper §2.2): "swap w' orientation so it merges with t." The
-vertical segment between A and B becomes horizontal (or vice versa), extending
-the terminating wall t.
+### Scope
 
-Concretely: find the rectangular block formed by A and the adjacent portion of
-B (bounded by P and the far end of w'). Re-partition that block with the
-rotated wall. All other tiles unchanged.
+1. **`Geom.is_asinowski_admissible : ?eps:float -> t -> t_joint -> side
+   -> bool`**.  Composes `apply_t_flip` with a guillotine predicate
+   based on `Geom.tree_of_rects`:
+   - `Error _` (windmill) → false
+   - `Ok [t']` with `is_generic` → true
+   - `Ok [t']` non-generic (cross junction created) → false
+   - anything else → false
+   Additive; `apply_t_flip` and `subwall_simplicity` untouched.
 
-Feed modified rects to `Geom.tree_of_rects` to recover the new Schroder tree.
+2. **`bin/asinowski_flip_check.ml`** (mirrors `bin/geom_flip_check.ml`).
+   Classify forward flips: `rejected_by_subwall` / `rejected_by_asinowski`
+   / `admissible` / `apply_none`.  For each admissible flip, classify
+   invertibility three-way: `invertible_in_asinowski` (reverse is also
+   admissible) / `invertible_only_via_windmill` (reverse exists but
+   crosses out of guillotine) / `genuine_failure`.  Theorem 27 predicts
+   category 2 is empty; any hit there is a filter or theorem-reading bug.
 
-Split ratio choice: preserve the area ratio between A and B's adjacent portion
-(simplest invariant that gives exact invertibility).
+3. **`scripts/run_asinowski_check.sh`**.  Copy of
+   `run_long_flip_check.sh` with different binary/report names.
 
-## 3. Integration and verification
+### Ground-truth cross-check (cheap, must pass)
 
-Wire geometric T-flips into `Tiling.enumerate_flips` alongside `wall_slide`
-and `simple_dissolve`/`simple_create`. The geometric T-flips replace the
-tree-based `pivot_out`/`pivot_in`.
+At n=7 generic mode, `rejected_by_asinowski` must equal 150 exactly
+and `admissible` must equal 1632 exactly (Round 6 oracle data).
 
-Verification: `dune exec bin/flip_check.exe -- --max-leaves 7` — Property C
-(invertibility) should pass at all n. Currently 1625/4209 failures at n=7.
+### Dependencies
+
+None.  `Geom.apply_t_flip`, `Geom.tree_of_rects`, `Geom.is_generic`,
+`Geom.of_weighted`, `Geom.of_tiling` all exist.
+
+### Performance envelope
+
+Expected n=10 in minutes, n=12 possibly hours (tree_of_rects per flip
+is 5–20× an apply_t_flip).  Benchmark at n=8 first.
+
+### After Round 7
+
+Phases D/F/G (see FLIP_INVERTIBILITY.md "What remains") become
+tractable with a known admissibility predicate and a verified
+geometric reference.
 
 ## Future directions
 

@@ -1553,9 +1553,26 @@ let relabel (is_h, tree) =
 
 (* --- Layer 2: Quotientope flips --- *)
 
-(* The 3 atomic flip types (Asinowski et al. 2024, Theorem 22) that generate
-   all cover relations of the lattice on strong rectangulations.
-   D4 reduces the paper's 5 flip types to these 3 orbits. *)
+(* Two distinct flip families coexist in this type, from two different papers:
+
+   (a) Asinowski et al. 2024 Theorem 22 / Figure 19 defines 5 flip types on
+       the *strong* poset (guillotine-only, windmill-avoiding per Theorem 27):
+       L-B pivoting, R-T pivoting, simple flip, V-slide, H-slide.  These are
+       cover relations of a lattice, closed on guillotine by construction.
+       Under D4 they reduce to 3 orbits: simple, pivot, wall slide.  The
+       `Simple_*`, `Pivot_*`, and `Wall_slide` variants mirror those 3 orbits.
+
+   (b) Merino-Mutze 2021 §2.2 defines a T-flip on *generic* rectangulations
+       (which include windmills).  Theorem 19 guarantees invertibility in the
+       generic space, but an M-M T-flip applied to a guillotine input can
+       produce a windmill output — at n=7, 150 of 1782 flips do so.  The
+       `T_flip` variant is populated by `Geom.enumerate_t_flips` and is
+       therefore the M-M operation, not Asinowski's pivoting.
+
+   The two coincide exactly when the M-M T-flip's output stays guillotine;
+   otherwise they diverge.  A tree-level T-flip that preserves the Schroder
+   representation must be the Asinowski restriction (M-M ∩ guillotine).  See
+   FLIP_INVERTIBILITY.md Round 6 and backlog.md Round 7. *)
 
 type flip =
   | Simple_dissolve of int
