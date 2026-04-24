@@ -31,7 +31,7 @@ In the codebase: `Tiling.split` and `Tiling.close` implement these directly on S
 
 Flips preserve size.  They are the cover relations of the lattice on their respective object set; every flip either goes "up" or "down," there are no cycles, and every pair of tilings has a unique meet and join.  The polytope structure guarantees connectivity and rules out dead ends *within the graph under consideration*.
 
-In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (swap two consecutive children), and `T_flip` (Asinowski pivoting, produced by `Geom.t_flip` or `Geom.enumerate_t_flips`).  `Tiling.enumerate_flips` generates simple/wall_slide; the `Geom.*` arm supplies T-flips.  Verified at n≤7: size preservation, validity, flip graph connectivity, and invertibility (Property C at 2942/2942).  The legacy `pivot_*` tree-heuristic attempt was removed in Phase F — `Geom.t_flip` with Asinowski admissibility is the correct tree-level T-flip.
+In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (swap two consecutive children), and `T_flip` (Asinowski pivoting, produced by `Geom.t_flip` or `Geom.enumerate_t_flips`).  `Tiling.enumerate_flips` generates simple/wall_slide; the `Geom.*` arm supplies T-flips.  Verified at n≤7: size preservation, validity, flip graph connectivity, and invertibility (Property C at 2942/2942).
 
 ## Layer 3 — Fixed tree, varying geometry: the 2-dimensional lattice
 
@@ -42,7 +42,7 @@ In the codebase: `simple_dissolve`/`simple_create` (simple flip), `wall_slide` (
 
 Segment sliding preserves the tree but changes which tiles are adjacent. At cross junctions, sliding a cut past the degenerate point switches the diagonal adjacency, changing the strong equivalence class. The two-order encoding tracks this topology change smoothly: both orders agree when all cross junctions are resolved, and diverge on incomparable pairs at unresolved junctions.
 
-In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. In theory, D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2). In practice, `resolve_splits` does not produce D4-covariant geometry (see REPORT.md), so the poset of a D4 image may differ from the D4 transform of the original poset. The abstract action is correct; the concrete realization via `resolve_splits` is not.
+In the codebase: `Poset.of_geom` computes the two-order encoding from `Geom.t`. In theory, D4 acts on the pair of orders by swapping and reversing (the hyperoctahedral group B_2). `resolve_splits` is not D4-covariant by design — it picks cross-junction diagonals in abs_pos order without accounting for tree structure (see REPORT.md) — so the poset of a D4 image may differ from the D4 transform of the original poset. The abstract action is correct; the concrete realization via `resolve_splits` is not.
 
 ## Mapping to Hyprland user actions
 
@@ -81,6 +81,6 @@ The mathematical semantics: grow is a Layer 3 operation parameterized by a Layer
 
 ## Connections between layers
 
-- D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders). The action is well-defined abstractly; the concrete realization via `resolve_splits` is not D4-covariant at Layer 3 (see REPORT.md).
+- D4 symmetry acts on all three layers: on the operad (tree symmetry), on the quotientope (flip graph symmetry), and on the 2-dimensional lattice (swap/reverse the two orders). The action is well-defined abstractly; the concrete realization via `resolve_splits` is not D4-covariant at Layer 3 by design (see REPORT.md).
 - The tiling algebra (Zeidler et al. 2017) provides the specification language (`|` beside, `/` stacked, tabstops as shared constraint variables). Split and close are the algebra's introduction and elimination rules; flips are its equational theory.
 - The three layers suggest a three-level verification strategy: visual SVG (all layers), model checking (layers 1-2), Rocq proof (all layers, with the tiebreaker correctness and lattice morphism questions as proof obligations).

@@ -83,7 +83,7 @@ The tabstop adjacency graph is D4-invariant (verified exhaustively up to n=6 by 
 
 Tile rectangles are computed from resolved splits (`resolve_splits`), which eliminates cross junctions by spreading coincident cuts at each parent boundary into evenly spaced positions. Two tiles are adjacent if they share a boundary segment of positive length in the resolved geometry.
 
-The geometric adjacency is a strict subset of the tabstop adjacency. The difference is exactly the unchosen diagonals at cross junctions — at each cross junction, one diagonal is chosen by a D4-covariant structural bias (sorting by subtree height).
+The geometric adjacency is a strict subset of the tabstop adjacency. The difference is exactly the unchosen diagonals at cross junctions — at each cross junction, one diagonal is chosen by the evenly-spaced abs_pos ordering of the cuts in the boundary group. This is not D4-covariant: rotating or reflecting a tiling can select a different diagonal (see `bin/d4_geom_counterexamples.ml`).
 
 ### Agreement verification
 

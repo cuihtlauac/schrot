@@ -2,21 +2,11 @@
 
 An exploration framework for principled tiling window management, targeting Hyprland. Schroder trees represent tiling topologies (1-to-1 correspondence with guillotine partitions). Three layers of algebraic structure govern operations: an operad (split/close between sizes), a quotientope (flips at fixed size), and a 2-dimensional lattice (geometry within a fixed tree). The keyboard-driven constraint demands that every operation has a well-defined, predictable effect.
 
-## Dirty state
+## Current state
 
-**Round 5 — M-M flip invertibility resolved.**  `Geom.subwall_simplicity` rewritten with an edge-match criterion.  `flip_check` Property C passes at all n tested (2942/2942 at n=7); `geom_flip_check` passes in both equal-splits and generic-weight modes up to n=12 (8.9M flips).  See FLIP_INVERTIBILITY.md Round 5.
+**Flip architecture.**  `Geom.enumerate_t_flips` implements **Merino-Mütze §2.2** (generic rectangulations).  Asinowski pivoting flips = M-M T-flip restricted to guillotine-preserving outputs (same rotation, stricter admissibility).  The Schroder-tree layer applies the Asinowski restriction via `Geom.is_asinowski_admissible`.  See THEORY.md Layer 2 for the three-flip-graph distinction (M-M generic / Asinowski strong / weak-guillotine Schroder-tree quotient).  See FLIP_INVERTIBILITY.md for the full debugging history.
 
-**Round 6 — symbolic LCA-rewrite rule derived from M-M oracle.**  `bin/tflip_sym_check.ml` matches `Geom.apply_t_flip` exactly on all 1632 guillotine-producing T-flips at n≤7.  The 150 "anomalies" at n=7 (19 at n=6, 1 at n=5) are M-M T-flips whose post-flip geometry is a windmill — expected by M-M Theorem 19 (generic rectangulation lattice), excluded from Asinowski's strong poset by Theorem 27.  Not bugs.
-
-**Key framing.**  `Geom.enumerate_t_flips` implements **Merino-Mütze §2.2** (generic).  Asinowski pivoting flips = M-M T-flip restricted to guillotine-preserving outputs (same rotation, stricter admissibility).  The Schroder-tree layer must apply the Asinowski restriction.  See THEORY.md Layer 2 for the three-flip-graph distinction (M-M generic / Asinowski strong / weak-guillotine Schroder-tree quotient).
-
-**Round 7 — geometric Asinowski PoC complete.**  `Geom.is_asinowski_admissible` in lib/geom.ml; `bin/asinowski_flip_check.ml` verifies invertibility of the Asinowski-pivoting subset at n≤10 in seconds.  At n=7 generic: 150 rejected, 1632 admissible (matches Round 6 oracle exactly), zero windmill-reverse or genuine failures.  See backlog.md.
-
-**Phase D — `Geom.t_flip` promoted.**  Round 6 symbolic LCA-rewrite lives in `lib/tiling.ml` as `Tiling.apply_t_flip_symbolic`; `lib/geom.ml` exposes `Geom.t_flip ~stem ~bar` composing it with the Asinowski admissibility filter.  `bin/t_flip_equiv_check.ml` verifies equivalence against the M-M oracle.
-
-**Phase F — `pivot_*` removed.**  The five legacy tree-heuristic functions (`pivot_out`, `pivot_out_root`, `pivot_in`, `pivot_in_root`, `pivot_in_wrap`, ~380 LOC) and the `Pivot_out`/`Pivot_in` variants are deleted.  `bin/cheatsheet.ml`, `bin/web.ml`, `bin/flip_unit.ml`, `bin/s_equiv.ml` migrated to `Geom.t_flip`.  The `web.ml` 'x' (exit frame) keybinding was removed; 'e' + arrow is the unified T-flip gesture.
-
-**Phase G — `Geom.enumerate_flips` unified entry point.**  Single function merges `Tiling.enumerate_flips` (simple + wall slide) with T-flips from `enumerate_t_flips`, deduplicated by result.  `bin/flip_check.ml`'s `all_flips` is now just a thin alias; its `all_flips_with_rects` (used for Property C's extra reverse-search at cross junctions) kept as-is.
+**Entry points.**  `Tiling.apply_t_flip_symbolic` is the tree-level LCA rewrite (unsafe in isolation — no admissibility check).  `Geom.t_flip ~stem ~bar` is the production-safe composition: symbolic rewrite gated by the Asinowski filter.  `Geom.enumerate_flips` is the unified enumerator (simple + wall slide + T-flip, deduplicated by result).  `bin/flip_check.ml`'s `all_flips` is a thin alias.
 
 **Verification:**
 - `dune exec bin/flip_check.exe -- --max-leaves 7`  — tree + geom mixed, A/B/C/D all pass (2942/2942)

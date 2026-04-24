@@ -2,7 +2,7 @@
 
     Layer 1 (operad): {!split}, {!close}, {!neighbor}.
     Layer 2 (quotientope): {!simple_dissolve}, {!simple_create},
-    {!pivot_out}, {!pivot_in}, {!wall_slide}, {!enumerate_flips}.
+    {!wall_slide}, {!apply_t_flip_symbolic}, {!enumerate_flips}.
     Layer 3 (2D lattice): {!resolve_splits}, {!rects_of_weighted},
     {!cuts_of_weighted}. *)
 

@@ -243,11 +243,6 @@ let init_splits tree =
    can adjust it in place. *)
 type rect = { rx: float; ry: float; rw: float; rh: float }
 
-let rec split_tree_height = function
-  | SLeaf _ -> 0
-  | SFrame { children; _ } ->
-    1 + List2.fold_left (fun acc c -> max acc (split_tree_height c)) 0 children
-
 type cut_seg = {
   cut_is_h: bool;      (* true = horizontal cut at constant y *)
   abs_pos: float;       (* position on the cut's own axis *)
@@ -258,8 +253,6 @@ type cut_seg = {
   frame_span: float;    (* owning frame's span on the cut's axis *)
   frame_origin: float;  (* absolute position of frame's start on the cut's axis *)
   frame_id: int;        (* unique id for the owning frame, stable across mutations *)
-  before_height: int;   (* height of child subtree before this cut (child cut_idx-1) *)
-  after_height: int;    (* height of child subtree after this cut (child cut_idx) *)
 }
 
 let collect_geometry is_h_root st =
@@ -273,26 +266,21 @@ let collect_geometry is_h_root st =
     | SFrame { pos; children } ->
       let k = List2.length children in
       let fid = fresh_id () in
-      let ch_arr = Array.of_list (List2.to_list children) in
       for i = 1 to k - 1 do
-        let bh = split_tree_height ch_arr.(i - 1) in
-        let ah = split_tree_height ch_arr.(i) in
         if is_h then
           let cy = y +. pos.(i) *. h in
           cuts := { cut_is_h = true; abs_pos = cy;
                     span_lo = x; span_hi = x +. w;
                     owner = pos; cut_idx = i;
                     frame_span = h; frame_origin = y;
-                    frame_id = fid;
-                    before_height = bh; after_height = ah } :: !cuts
+                    frame_id = fid } :: !cuts
         else
           let cx = x +. pos.(i) *. w in
           cuts := { cut_is_h = false; abs_pos = cx;
                     span_lo = y; span_hi = y +. h;
                     owner = pos; cut_idx = i;
                     frame_span = w; frame_origin = x;
-                    frame_id = fid;
-                    before_height = bh; after_height = ah } :: !cuts
+                    frame_id = fid } :: !cuts
       done;
       List2.iteri (fun i child ->
         if is_h then
@@ -355,10 +343,14 @@ let find_boundary_groups cuts eps =
 
 (* Resolve junctions by iterative relaxation toward evenly spaced targets.
 
-   D4-covariant structural bias: at each boundary group, cuts from
-   shallower subtrees get smaller target slots, giving deeper subtrees
-   more room.  This is D4-covariant because subtree height is a tree
-   property, invariant under geometric transformations.
+   At each boundary group containing a cross junction, all cuts are
+   assigned evenly spaced target positions in abs_pos order.  This
+   preserves per-frame monotonicity (positions within one frame stay
+   in cut_idx order, which matches abs_pos order at initialization).
+   The result is not D4-covariant — adjacency at cross junctions can
+   differ across D4 orbit members — but it is well-defined and avoids
+   degenerate zero-width tiles.  See bin/d4_geom_counterexamples.ml
+   for the D4 gap.
 
    References:
    - Eppstein et al. 2009, "Area-Universal Rectangular Layouts": adjacency
@@ -397,16 +389,9 @@ let resolve_splits ?(max_iter = 40) tiling =
     let owner_of : (int * int, float array * int) Hashtbl.t = Hashtbl.create 8 in
     List.iter (fun (span_lo, span_hi, group) ->
       let n = List.length group in
-      (* D4-covariant structural sort: each cut moves toward its shallower
-         side, giving the deeper side more room.  Sort by
-         (before_height - after_height): negative = before is shallower,
-         cut gets a smaller slot; positive = after is shallower, larger slot. *)
-      let sorted = List.sort (fun a b ->
-        let da = a.before_height - a.after_height in
-        let db = b.before_height - b.after_height in
-        let c = compare da db in
-        if c <> 0 then c else compare a.abs_pos b.abs_pos
-      ) group in
+      (* Sort by abs_pos so that within any single frame, cuts receive
+         targets in cut_idx order (preserving monotonicity of pos). *)
+      let sorted = List.sort (fun a b -> compare a.abs_pos b.abs_pos) group in
       (* Assign evenly spaced targets *)
       List.iteri (fun i c ->
         let j = i + 1 in
@@ -1595,7 +1580,7 @@ let relabel (is_h, tree) =
        L-B pivoting, R-T pivoting, simple flip, V-slide, H-slide.  These are
        cover relations of a lattice, closed on guillotine by construction.
        Under D4 they reduce to 3 orbits: simple, pivot, wall slide.  The
-       `Simple_*`, `Pivot_*`, and `Wall_slide` variants mirror those 3 orbits.
+       `Simple_*`, `T_flip`, and `Wall_slide` variants mirror those 3 orbits.
 
    (b) Merino-Mutze 2021 §2.2 defines a T-flip on *generic* rectangulations
        (which include windmills).  Theorem 19 guarantees invertibility in the
