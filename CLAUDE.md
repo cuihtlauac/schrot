@@ -20,10 +20,7 @@ An exploration framework for principled tiling window management, targeting Hypr
 
 ```sh
 dune build
-dune exec bin/main.exe -- --output out.svg    # interactive, reads rules from stdin
-dune exec bin/test_svg.exe -- --output svg       # generates svg/{policy}_{open_close,move}.svg
 dune exec bin/tiling_test.exe -- --output svg    # Schroder tiling enumeration + open/close SVGs
-dune exec bin/model_check.exe -- --policy dominance --max-leaves 6
 dune exec bin/flip_test.exe -- --output svg      # Layer 2 flip operations SVG
 dune exec bin/flip_check.exe -- --max-leaves 7   # verify flip properties A-D
 dune exec bin/asinowski_flip_check.exe -- --max-leaves 7 --generic  # Asinowski pivot invertibility
@@ -41,7 +38,7 @@ All generated files (SVGs, etc.) go under `svg/` in the project, never in `/tmp`
 
 ## Architecture
 
-Core library: `lib/schrot.ml` (tree type), `lib/tiling.ml` (operations, flips, D4, junction resolution), `lib/geom.ml` (geometry, adjacency, T-joints, tree reconstruction), `lib/poset.ml` (2D lattice encoding), `lib/svg.ml` (rendering), `lib/checker.ml` (model checker). Binary layer (frozen, TODO migrate): `lib/term.ml`, `lib/rewrite.ml`, `lib/command.ml`, `lib/path.ml`, `lib/policy.ml`. See `.mli` files for APIs.
+Core library: `lib/schrot.ml` (tree type), `lib/list2.ml` (lists of ≥2 elements), `lib/tiling.ml` (operations, flips, D4, junction resolution, tabstops), `lib/geom.ml` (geometry, adjacency, T-joints, tree reconstruction), `lib/poset.ml` (2D lattice encoding), `lib/svg.ml` (rendering), `lib/checker.ml` (model checker).  See `.mli` files for APIs.
 
 ## Schroder tree model
 
@@ -86,7 +83,7 @@ Geometric is a subset of tabstop. The difference is the unchosen diagonals at cr
 
 This project uses iterative visual verification driving algebraic rule refinement:
 1. Implement or change rewriting rules
-2. Generate SVG test pairs (before->after) with `test_svg.exe` or `tiling_test.exe`
+2. Generate SVG test pairs (before->after) with `tiling_test.exe`, `flip_test.exe`, or `cheatsheet.exe`
 3. Visually inspect with `eog` (keep the window open; eog auto-refreshes when files change on disk, so do not relaunch it)
 4. Refine based on case-by-case feedback
 5. Use symmetry to reduce review set
