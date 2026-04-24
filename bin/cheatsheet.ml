@@ -1,12 +1,19 @@
-(* SVG cheat sheet: one row per transformation, before -> after.
-   Common starting tiling, highlighted selected tile + affected tiles,
-   arrow overlay for oriented operations. *)
+(* SVG cheat sheet: 3 rows of forward/inverse operation pairs.
 
-let tile_w = 160.
-let tile_h = 130.
+   Each row shows the shared base tiling h(5, v(4, 3, h(v(2, 1), 0)), 6)
+   on the left, the post-operation tiling on the right, and two
+   horizontal arrows between — forward label on top, inverse label on
+   bottom.  Focus highlights and in-tile arrows reflect the real
+   keystroke UX: the selected tile on each panel is the one the user
+   presses on, the in-tile arrow shows the direction of the
+   corresponding arrow key. *)
+
+let tile_w = 200.
+let tile_h = 160.
 let margin = 8.
 let gap = 14.
-let arrow_gap = 40.
+let label_w = 140.
+let between_gap = 120.
 let row_h = tile_h +. 60.
 let label_y_off = 14.
 
@@ -37,7 +44,6 @@ let render_tile ~x ~y ~selected ~affected tiling =
   let rects = Tiling.rects_of_weighted wt in
   let x0 = x +. margin and y0 = y +. margin in
   let w0 = tile_w -. 2. *. margin and h0 = tile_h -. 2. *. margin in
-  (* Tile fills *)
   List.iter (fun (n, (r : Tiling.rect)) ->
     let ox = x0 +. r.rx *. w0 in
     let oy = y0 +. r.ry *. h0 in
@@ -53,7 +59,6 @@ let render_tile ~x ~y ~selected ~affected tiling =
           fill=\"%s\">%d</text>\n"
       (ox +. ow /. 2.) (oy +. oh /. 2.) tfill n
   ) rects;
-  (* Cut lines *)
   let lines_by_depth = Tiling.cuts_of_weighted wt in
   let max_depth = Array.length lines_by_depth - 1 in
   for depth = max_depth - 1 downto 0 do
@@ -64,7 +69,6 @@ let render_tile ~x ~y ~selected ~affected tiling =
         (x0 +. lx2 *. w0) (y0 +. ly2 *. h0)
     ) lines_by_depth.(depth)
   done;
-  (* Border *)
   addf "<rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" \
         fill=\"none\" stroke=\"#333\" stroke-width=\"1.5\"/>\n"
     x0 y0 w0 h0;
@@ -82,58 +86,91 @@ let render_arrow ~x ~y ~selected ~dir tiling =
     let cx = x0 +. (r.rx +. r.rw /. 2.) *. w0 in
     let cy = y0 +. (r.ry +. r.rh /. 2.) *. h0 in
     let dx, dy = match dir with
-      | `Left  -> (-14., 0.)
-      | `Right -> (14., 0.)
-      | `Up    -> (0., -14.)
-      | `Down  -> (0., 14.)
+      | `Left  -> (-16., 0.)
+      | `Right -> (16., 0.)
+      | `Up    -> (0., -16.)
+      | `Down  -> (0., 16.)
     in
     let buf = Buffer.create 128 in
     Printf.bprintf buf
       "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
-       stroke=\"white\" stroke-width=\"2.5\" marker-end=\"url(#arrowhead)\"/>\n"
+       stroke=\"white\" stroke-width=\"2.5\" marker-end=\"url(#arrowhead-white)\"/>\n"
       (cx -. dx *. 0.6) (cy -. dy *. 0.6) (cx +. dx *. 0.8) (cy +. dy *. 0.8);
     Buffer.contents buf
 
-(* One cell: label, before tiling, arrow, after tiling *)
-let label_w = 120.
-let cell_w = label_w +. tile_w +. arrow_gap +. tile_w
-let col_gap = 20.
+type row = {
+  label : string;
+  sublabel : string;
+  forward_op : string;
+  inverse_op : string;
+  before_selected : int;
+  before_affected : int list;
+  before_dir : [ `Left | `Right | `Up | `Down ] option;
+  after_selected : int;
+  after_affected : int list;
+  after_dir : [ `Left | `Right | `Up | `Down ] option;
+  before : Tiling.t;
+  after : Tiling.t;
+}
 
-let render_cell ~x ~y ~label ~sublabel ~selected ~affected ~dir ~before ~after =
+(* One row: label + base + bidirectional labeled arrows + post-op *)
+let render_row ~x ~y (r : row) =
   let buf = Buffer.create 4096 in
   let add = Buffer.add_string buf in
   let addf fmt = Printf.ksprintf add fmt in
   let lx = x in
   let bx = x +. label_w in
-  let ax = bx +. tile_w in
-  let rx = ax +. arrow_gap in
+  let ax1 = bx +. tile_w in
+  let ax2 = ax1 +. between_gap in
+  let rx = ax2 in
   (* Row label *)
   addf "<text x=\"%g\" y=\"%g\" font-size=\"14\" font-weight=\"bold\" \
         font-family=\"monospace\" fill=\"#333\">%s</text>\n"
-    lx (y +. tile_h /. 2. -. 4.) label;
+    lx (y +. tile_h /. 2. -. 4.) r.label;
   addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" \
         font-family=\"monospace\" fill=\"#888\">%s</text>\n"
-    lx (y +. tile_h /. 2. +. 12.) sublabel;
+    lx (y +. tile_h /. 2. +. 12.) r.sublabel;
   (* Before *)
-  add (render_tile ~x:bx ~y ~selected ~affected before);
-  (match dir with
-   | Some d -> add (render_arrow ~x:bx ~y ~selected ~dir:d before)
+  add (render_tile ~x:bx ~y ~selected:r.before_selected
+         ~affected:r.before_affected r.before);
+  (match r.before_dir with
+   | Some d -> add (render_arrow ~x:bx ~y ~selected:r.before_selected
+                      ~dir:d r.before)
    | None -> ());
-  (* Arrow between *)
-  let amx = ax +. arrow_gap /. 2. in
-  let amy = y +. tile_h /. 2. in
-  addf "<text x=\"%g\" y=\"%g\" font-size=\"20\" text-anchor=\"middle\" \
-        dominant-baseline=\"central\" fill=\"#666\">\xE2\x86\x92</text>\n"
-    amx amy;
+  (* Bidirectional arrows between the two tilings *)
+  let mid_y = y +. tile_h /. 2. in
+  let amid = (ax1 +. ax2) /. 2. in
+  let arrow_inset = 10. in
+  let line_x1 = ax1 +. arrow_inset in
+  let line_x2 = ax2 -. arrow_inset in
+  (* Forward arrow: left to right, above midline *)
+  addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
+        stroke=\"#555\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead-right)\"/>\n"
+    line_x1 (mid_y -. 12.) line_x2 (mid_y -. 12.);
+  addf "<text x=\"%g\" y=\"%g\" font-size=\"12\" text-anchor=\"middle\" \
+        font-family=\"monospace\" fill=\"#333\">%s</text>\n"
+    amid (mid_y -. 18.) r.forward_op;
+  (* Inverse arrow: right to left, below midline *)
+  addf "<line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" \
+        stroke=\"#555\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead-left)\"/>\n"
+    line_x2 (mid_y +. 12.) line_x1 (mid_y +. 12.);
+  addf "<text x=\"%g\" y=\"%g\" font-size=\"12\" text-anchor=\"middle\" \
+        font-family=\"monospace\" fill=\"#333\">%s</text>\n"
+    amid (mid_y +. 28.) r.inverse_op;
   (* After *)
-  add (render_tile ~x:rx ~y ~selected ~affected after);
-  (* Tiling strings *)
+  add (render_tile ~x:rx ~y ~selected:r.after_selected
+         ~affected:r.after_affected r.after);
+  (match r.after_dir with
+   | Some d -> add (render_arrow ~x:rx ~y ~selected:r.after_selected
+                      ~dir:d r.after)
+   | None -> ());
+  (* Tiling strings below each tiling *)
   addf "<text x=\"%g\" y=\"%g\" font-size=\"9\" font-family=\"monospace\" \
         fill=\"#999\">%s</text>\n"
-    bx (y +. tile_h +. label_y_off) (Tiling.to_string before);
+    bx (y +. tile_h +. label_y_off) (Tiling.to_string r.before);
   addf "<text x=\"%g\" y=\"%g\" font-size=\"9\" font-family=\"monospace\" \
         fill=\"#999\">%s</text>\n"
-    rx (y +. tile_h +. label_y_off) (Tiling.to_string after);
+    rx (y +. tile_h +. label_y_off) (Tiling.to_string r.after);
   Buffer.contents buf
 
 let () =
@@ -143,7 +180,7 @@ let () =
   ] (fun _ -> ()) "cheatsheet [--output DIR]";
   (try Sys.mkdir !output_dir 0o755 with Sys_error _ -> ());
 
-  (* Common starting tiling: h(5, v(4, 3, h(v(2, 1), 0)), 6)
+  (* Shared base tiling: h(5, v(4, 3, h(v(2, 1), 0)), 6)
      Geometry:
               5
      -------------------
@@ -152,13 +189,8 @@ let () =
            |       |   0
      -------------------
               6
-
-     v-frame is 3-ary [4, 3, h(v(2,1), 0)] -> 2-subframe, slide
-     v(2,1) is 2-ary all-Tile inside h-frame -> dissolve, exit
-     Tile 3 adjacent to h-frame in v-frame -> enter
-     Tile 6 at bottom makes the v-frame cut non-wall
   *)
-  let t : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
+  let base : Tiling.t = (true, Schrot.unit_frame (List2.Cons2 (
     Tile 5,
     Schrot.unit_frame (List2.Cons2 (Tile 4, Tile 3,
       [Schrot.unit_frame (List2.Cons2 (
@@ -166,44 +198,38 @@ let () =
         Tile 0, []))])),
     [Tile 6]))) in
 
-  let apply f = match f t with Some t' -> t' | None -> t in
+  let rows = [
+    { label = "Split / Close";
+      sublabel = "add / remove a tile";
+      forward_op = "split"; inverse_op = "close";
+      before_selected = 3; before_affected = []; before_dir = Some `Left;
+      after_selected = 7; after_affected = []; after_dir = None;
+      before = base;
+      after = Tiling.split ~side:Before 3 Tiling.V base;
+    };
+    { label = "Subframe / Dissolve";
+      sublabel = "wrap a sibling pair";
+      forward_op = "subframe"; inverse_op = "dissolve";
+      before_selected = 3; before_affected = [4]; before_dir = Some `Left;
+      after_selected = 3; after_affected = [4]; after_dir = None;
+      before = base;
+      after = (match Tiling.simple_create 4 3 base with
+               | Some t -> t | None -> base);
+    };
+    { label = "Push";
+      sublabel = "stem extends, bar yields (self-inverse)";
+      forward_op = "push"; inverse_op = "push";
+      before_selected = 0; before_affected = [3; 2; 1]; before_dir = Some `Left;
+      after_selected = 3; after_affected = [2; 1; 0]; after_dir = Some `Down;
+      before = base;
+      after = (match Geom.t_flip ~stem:0 ~bar:3 base with
+               | Some t -> t | None -> base);
+    };
+  ] in
 
-  (* Grid layout: 2 columns, 4 rows.
-     Row 0: Split, Close
-     Row 1: 2-subframe, Dissolve
-     Row 2: Enter, Exit
-     Row 3: Slide *)
-  let grid = [|
-    [| Some ("Split", "",
-             3, [7], Some `Right,
-             t, Tiling.split 3 Tiling.V t);
-       Some ("Close", "",
-             3, [], None,
-             t, Tiling.close 3 t) |];
-
-    [| Some ("2-subframe", "sibling leaves",
-             3, [4], Some `Left,
-             t, apply (Tiling.simple_create 4 3));
-       Some ("Dissolve", "in a 2-leaf sub-frame",
-             2, [1], None,
-             t, apply (Tiling.simple_dissolve 2)) |];
-
-    [| Some ("Enter", "next to a sub-frame",
-             3, [2], Some `Right,
-             t, apply (Geom.t_flip ~stem:0 ~bar:3));
-       Some ("Exit", "in a nested frame",
-             2, [1], None,
-             t, apply (Geom.t_flip ~stem:2 ~bar:0)) |];
-
-    [| Some ("Slide", "consecutive in frame",
-             3, [2; 1; 0], Some `Right,
-             t, apply (Tiling.wall_slide 3 0));
-       None |];
-  |] in
-
-  let nrows = Array.length grid in
-  let total_w = gap +. 2. *. cell_w +. col_gap +. gap in
-  let total_h = float_of_int nrows *. row_h +. gap in
+  let nrows = List.length rows in
+  let total_w = gap +. label_w +. tile_w +. between_gap +. tile_w +. gap in
+  let total_h = float_of_int nrows *. row_h +. gap +. 36. in
 
   let buf = Buffer.create 16384 in
   let add = Buffer.add_string buf in
@@ -211,36 +237,43 @@ let () =
   addf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%g\" height=\"%g\">\n"
     total_w total_h;
   addf "<rect width=\"%g\" height=\"%g\" fill=\"white\"/>\n" total_w total_h;
-  (* Arrow marker definition *)
-  add "<defs><marker id=\"arrowhead\" markerWidth=\"8\" markerHeight=\"6\" \
-       refX=\"7\" refY=\"3\" orient=\"auto\"><polygon points=\"0 0, 8 3, 0 6\" \
-       fill=\"white\"/></marker></defs>\n";
+  (* Arrow marker definitions *)
+  add "<defs>\n";
+  add "  <marker id=\"arrowhead-white\" markerWidth=\"8\" markerHeight=\"6\" \
+       refX=\"7\" refY=\"3\" orient=\"auto\">\
+       <polygon points=\"0 0, 8 3, 0 6\" fill=\"white\"/></marker>\n";
+  add "  <marker id=\"arrowhead-right\" markerWidth=\"8\" markerHeight=\"6\" \
+       refX=\"7\" refY=\"3\" orient=\"auto\">\
+       <polygon points=\"0 0, 8 3, 0 6\" fill=\"#555\"/></marker>\n";
+  add "  <marker id=\"arrowhead-left\" markerWidth=\"8\" markerHeight=\"6\" \
+       refX=\"7\" refY=\"3\" orient=\"auto\">\
+       <polygon points=\"0 0, 8 3, 0 6\" fill=\"#555\"/></marker>\n";
+  add "</defs>\n";
 
-  Array.iteri (fun row cols ->
-    let y = gap +. float_of_int row *. row_h in
-    Array.iteri (fun col cell ->
-      match cell with
-      | None -> ()
-      | Some (label, sublabel, selected, affected, dir, before, after) ->
-        let x = gap +. float_of_int col *. (cell_w +. col_gap) in
-        add (render_cell ~x ~y ~label ~sublabel ~selected ~affected ~dir
-               ~before ~after)
-    ) cols
-  ) grid;
+  List.iteri (fun i row ->
+    let y = gap +. float_of_int i *. row_h in
+    add (render_row ~x:gap ~y row)
+  ) rows;
 
   (* Legend *)
-  let ly = total_h -. 20. in
-  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
+  let ly = total_h -. 24. in
+  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" \
+        stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
     gap ly selected_color;
-  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" fill=\"#666\">selected</text>\n"
+  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" \
+        fill=\"#666\">selected</text>\n"
     (gap +. 16.) (ly +. 10.);
-  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
+  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" \
+        stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
     (gap +. 80.) ly affected_color;
-  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" fill=\"#666\">affected</text>\n"
+  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" \
+        fill=\"#666\">affected</text>\n"
     (gap +. 96.) (ly +. 10.);
-  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
+  addf "<rect x=\"%g\" y=\"%g\" width=\"12\" height=\"12\" fill=\"%s\" \
+        stroke=\"#ccc\" stroke-width=\"0.5\"/>\n"
     (gap +. 170.) ly unchanged_color;
-  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" fill=\"#666\">unchanged</text>\n"
+  addf "<text x=\"%g\" y=\"%g\" font-size=\"10\" font-family=\"monospace\" \
+        fill=\"#666\">unchanged</text>\n"
     (gap +. 186.) (ly +. 10.);
 
   add "</svg>\n";
