@@ -198,8 +198,6 @@ The Round 3 PoC was extended with three instrumentation axes (genericity
 tracking, filter-bypass reverse search, an `--generic` flag that uses
 irrational weights via `Geom.of_weighted`) to decide whether the residual
 failures indict the paper (Merino-Mütze Theorem 19) or the codebase.
-Procedure in the plan at
-`/home/cuihtlauac/.claude/plans/dynamic-sparking-platypus.md`.
 
 ### Measurements at n=7
 
